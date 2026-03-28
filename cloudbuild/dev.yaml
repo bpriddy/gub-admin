@@ -1,0 +1,49 @@
+steps:
+  # Build Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - build
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/gub-admin:${SHORT_SHA}'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/gub-admin:dev-latest'
+      - '.'
+    id: docker-build
+
+  # Push image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - push
+      - '--all-tags'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/gub-admin'
+    id: docker-push
+    waitFor: ['docker-build']
+
+  # Deploy to Cloud Run (IAP-protected — no --allow-unauthenticated)
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - gub-admin-dev
+      - '--image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/gub-admin:${SHORT_SHA}'
+      - '--region=${_REGION}'
+      - '--platform=managed'
+      - '--set-env-vars=DATABASE_URL=$$DATABASE_URL'
+      - '--service-account=${_SERVICE_ACCOUNT}'
+      - '--no-allow-unauthenticated'
+    secretEnv: ['DATABASE_URL']
+    waitFor: ['docker-push']
+
+substitutions:
+  _REGION: us-central1
+  _REPO: gub-admin
+  _SERVICE_ACCOUNT: gub-admin@${PROJECT_ID}.iam.gserviceaccount.com
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/${PROJECT_ID}/secrets/gub-admin-db-url-dev/versions/latest
+      env: DATABASE_URL
+
+options:
+  logging: CLOUD_LOGGING_ONLY
