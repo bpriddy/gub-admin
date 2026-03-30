@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 interface Office {
   id: string;
@@ -196,6 +197,7 @@ export default function OfficesPage() {
                     <td className="px-4 py-3 text-gray-500">{o._count.staff}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex gap-3 justify-end">
+                        <Link href={`/offices/${o.id}`} className="text-xs text-gray-400 hover:underline">History</Link>
                         <button onClick={() => startEdit(o)} className="text-xs text-gray-600 hover:underline">Edit</button>
                         <button onClick={() => handleDelete(o.id, o.name)} className="text-xs text-red-500 hover:underline">Delete</button>
                       </div>

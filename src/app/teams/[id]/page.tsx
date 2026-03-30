@@ -7,12 +7,23 @@ import { use } from 'react';
 interface StaffOption { id: string; fullName: string; email: string; title: string | null; status: string; office: { name: string } | null; }
 interface Member { id: string; staffId: string; staff: StaffOption; }
 interface Team { id: string; name: string; description: string | null; isActive: boolean; startedAt: string | null; members: Member[]; }
+interface ChangeEntry { id: string; property: string; valueText: string | null; valueDate: string | null; changedAt: string; changedByStaff: { fullName: string } | null; }
+
+const PROP_LABELS: Record<string, string> = {
+  name: 'Name', description: 'Description', is_active: 'Active', started_at: 'Date started',
+};
+function formatValue(property: string, valueText: string | null, valueDate: string | null): string {
+  if (property === 'started_at') return valueDate ? valueDate.split('T')[0] : '—';
+  if (property === 'is_active') return valueText === 'true' ? 'Yes' : 'No';
+  return valueText ?? '—';
+}
 
 export default function TeamDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const [team, setTeam] = useState<Team | null>(null);
   const [allStaff, setAllStaff] = useState<StaffOption[]>([]);
+  const [changes, setChanges] = useState<ChangeEntry[]>([]);
   const [addStaffId, setAddStaffId] = useState('');
   const [editMode, setEditMode] = useState(false);
   const [editState, setEditState] = useState({ name: '', description: '', isActive: true, startedAt: '' });
@@ -35,7 +46,12 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
     setAllStaff(await res.json());
   }
 
-  useEffect(() => { void loadTeam(); void loadStaff(); }, [id]);
+  async function loadHistory() {
+    const res = await fetch(`/api/teams/${id}/history`);
+    setChanges(await res.json());
+  }
+
+  useEffect(() => { void loadTeam(); void loadStaff(); void loadHistory(); }, [id]);
 
   async function handleSave() {
     setSaving(true);
@@ -52,6 +68,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
     setSaving(false);
     setEditMode(false);
     void loadTeam();
+    void loadHistory();
   }
 
   async function handleDelete() {
@@ -199,6 +216,36 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
             ))}
           </tbody>
         </table>
+      </div>
+      {/* Change history */}
+      <div className="mt-8">
+        <h2 className="font-medium text-sm text-gray-700 mb-3">Change history ({changes.length})</h2>
+        {changes.length === 0 ? (
+          <p className="text-sm text-gray-400 italic">No changes recorded yet. Edits made from this page will appear here.</p>
+        ) : (
+          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Property</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">New value</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Changed</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">By</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {changes.map((c) => (
+                  <tr key={c.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-gray-700">{PROP_LABELS[c.property] ?? c.property}</td>
+                    <td className="px-4 py-3 font-medium">{formatValue(c.property, c.valueText, c.valueDate)}</td>
+                    <td className="px-4 py-3 text-gray-400 text-xs">{new Date(c.changedAt).toLocaleString()}</td>
+                    <td className="px-4 py-3 text-gray-500 text-xs">{c.changedByStaff?.fullName ?? <span className="text-gray-300">—</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

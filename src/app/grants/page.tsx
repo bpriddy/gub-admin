@@ -11,6 +11,12 @@ const STAFF_SCOPE_LABELS: Record<string, string> = {
   staff_current: 'Current staff',
 };
 
+const FUNCTIONAL_LABELS: Record<string, string> = {
+  'func:temporal': 'Temporal access',
+  'func:export': 'Export / bulk download',
+  'func:admin_ui': 'Admin UI access',
+};
+
 function ResourceCell({
   resourceType,
   resourceId,
@@ -26,11 +32,28 @@ function ResourceCell({
   accountNames: Map<string, string>;
   campaignNames: Map<string, string>;
 }) {
-  // Scope-only grants (no meaningful resource)
+  // Scope-only staff grants
   if (resourceType in STAFF_SCOPE_LABELS) {
     return (
       <span className="text-xs text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">
         {STAFF_SCOPE_LABELS[resourceType]}
+      </span>
+    );
+  }
+
+  // Functional grants
+  if (resourceType in FUNCTIONAL_LABELS) {
+    return (
+      <span className="text-xs text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">
+        {FUNCTIONAL_LABELS[resourceType]}
+      </span>
+    );
+  }
+  // Unknown functional (func:*) — still render nicely
+  if (resourceType.startsWith('func:')) {
+    return (
+      <span className="text-xs text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">
+        {resourceType}
       </span>
     );
   }
@@ -141,9 +164,15 @@ export default async function GrantsPage({
           </Link>
           <Link
             href="/grants/batch"
-            className="text-sm px-3 py-1.5 bg-gray-900 text-white rounded hover:bg-gray-700"
+            className="text-sm px-3 py-1.5 border border-gray-300 rounded hover:bg-gray-50"
           >
             Batch Grant
+          </Link>
+          <Link
+            href="/grants/new"
+            className="text-sm px-3 py-1.5 bg-gray-900 text-white rounded hover:bg-gray-700"
+          >
+            New Grant
           </Link>
         </div>
       </div>

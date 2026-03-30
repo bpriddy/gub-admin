@@ -20,6 +20,42 @@ export async function GET(request: Request) {
   return NextResponse.json(grants);
 }
 
+const CreateGrantSchema = z.object({
+  userId: z.string().uuid(),
+  resourceType: z.string().min(1),
+  resourceId: z.string().uuid().optional(), // omit for functional grants — nil UUID used
+  role: z.string().min(1).default('viewer'),
+  grantedBy: z.string().uuid(),
+  expiresAt: z.string().nullable().optional(),
+});
+
+const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+
+export async function POST(request: Request) {
+  const body = await request.json();
+  const parsed = CreateGrantSchema.safeParse(body);
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+
+  const { userId, resourceType, role, grantedBy, expiresAt } = parsed.data;
+  const resourceId = parsed.data.resourceId ?? NIL_UUID;
+  const expiresAtDate = expiresAt ? new Date(expiresAt) : null;
+
+  const existing = await prisma.accessGrant.findFirst({
+    where: { userId, resourceType, resourceId, revokedAt: null },
+  });
+
+  const grant = existing
+    ? await prisma.accessGrant.update({
+        where: { id: existing.id },
+        data: { role, expiresAt: expiresAtDate },
+      })
+    : await prisma.accessGrant.create({
+        data: { userId, resourceType, resourceId, role, grantedBy, expiresAt: expiresAtDate },
+      });
+
+  return NextResponse.json({ granted: 1, grant }, { status: 201 });
+}
+
 const RevokeSchema = z.object({
   grantId: z.string().uuid(),
   revokedBy: z.string().uuid(),
