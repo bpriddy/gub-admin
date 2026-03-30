@@ -3,6 +3,8 @@ import Link from 'next/link';
 const sections = [
   { href: '/users', label: 'Users', description: 'Google OAuth identities — auth credentials' },
   { href: '/staff', label: 'Staff', description: 'Org identity — current and former employees' },
+  { href: '/offices', label: 'Offices', description: 'Physical locations and regional branches' },
+  { href: '/teams', label: 'Teams', description: 'Named staff groupings for access control' },
   { href: '/accounts', label: 'Accounts', description: 'Client accounts and brand relationships' },
   { href: '/campaigns', label: 'Campaigns', description: 'Engagements within accounts' },
   { href: '/grants', label: 'Access Grants', description: 'Per-user, per-resource access control' },

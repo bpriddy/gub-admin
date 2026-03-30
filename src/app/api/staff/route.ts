@@ -8,6 +8,7 @@ export async function GET() {
     select: {
       id: true,
       userId: true,
+      officeId: true,
       fullName: true,
       email: true,
       title: true,
@@ -15,6 +16,7 @@ export async function GET() {
       status: true,
       startedAt: true,
       endedAt: true,
+      office: { select: { name: true } },
     },
   });
   return NextResponse.json(staff);
@@ -26,9 +28,10 @@ const CreateStaffSchema = z.object({
   title: z.string().nullable().optional(),
   department: z.string().nullable().optional(),
   status: z.string().default('active'),
-  startedAt: z.string(), // ISO date string
+  startedAt: z.string(),
   endedAt: z.string().nullable().optional(),
   userId: z.string().uuid().nullable().optional(),
+  officeId: z.string().uuid().nullable().optional(),
 });
 
 export async function POST(request: Request) {

@@ -6,7 +6,10 @@ export const dynamic = 'force-dynamic';
 export default async function StaffPage() {
   const staff = await prisma.staff.findMany({
     orderBy: { fullName: 'asc' },
-    include: { user: { select: { email: true } } },
+    include: {
+      user: { select: { email: true } },
+      office: { select: { name: true } },
+    },
   });
 
   return (
@@ -27,7 +30,7 @@ export default async function StaffPage() {
               <th className="text-left px-4 py-3 font-medium text-gray-600">Name</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Email</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Title</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Department</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Office</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">User</th>
             </tr>
@@ -42,7 +45,7 @@ export default async function StaffPage() {
                 </td>
                 <td className="px-4 py-3 text-gray-700">{s.email}</td>
                 <td className="px-4 py-3 text-gray-500">{s.title ?? '—'}</td>
-                <td className="px-4 py-3 text-gray-500">{s.department ?? '—'}</td>
+                <td className="px-4 py-3 text-gray-500">{s.office?.name ?? '—'}</td>
                 <td className="px-4 py-3">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${s.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                     {s.status}

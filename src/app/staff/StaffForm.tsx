@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
+type Office = { id: string; name: string };
+
 type Props = {
   staff?: {
     id: string;
@@ -14,10 +16,12 @@ type Props = {
     startedAt: Date;
     endedAt: Date | null;
     userId: string | null;
+    officeId: string | null;
   };
+  offices: Office[];
 };
 
-export default function StaffForm({ staff }: Props) {
+export default function StaffForm({ staff, offices }: Props) {
   const router = useRouter();
   const isEdit = !!staff;
 
@@ -27,9 +31,10 @@ export default function StaffForm({ staff }: Props) {
     title: staff?.title ?? '',
     department: staff?.department ?? '',
     status: staff?.status ?? 'active',
-    startedAt: staff?.startedAt ? staff.startedAt.toISOString().split('T')[0] : '',
-    endedAt: staff?.endedAt ? staff.endedAt.toISOString().split('T')[0] : '',
+    startedAt: staff?.startedAt ? staff.startedAt.toISOString().split('T')[0] ?? '' : '',
+    endedAt: staff?.endedAt ? staff.endedAt.toISOString().split('T')[0] ?? '' : '',
     userId: staff?.userId ?? '',
+    officeId: staff?.officeId ?? '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -45,6 +50,7 @@ export default function StaffForm({ staff }: Props) {
       department: form.department || null,
       endedAt: form.endedAt || null,
       userId: form.userId || null,
+      officeId: form.officeId || null,
     };
 
     const res = isEdit
@@ -89,6 +95,20 @@ export default function StaffForm({ staff }: Props) {
       {field('Department', 'department')}
 
       <div>
+        <label className="block text-xs text-gray-500 mb-1">Office</label>
+        <select
+          value={form.officeId}
+          onChange={(e) => setForm((f) => ({ ...f, officeId: e.target.value }))}
+          className="w-full text-sm border border-gray-300 rounded px-2 py-1.5"
+        >
+          <option value="">— No office —</option>
+          {offices.map((o) => (
+            <option key={o.id} value={o.id}>{o.name}</option>
+          ))}
+        </select>
+      </div>
+
+      <div>
         <label className="block text-xs text-gray-500 mb-1">Status</label>
         <select
           value={form.status}
@@ -96,6 +116,7 @@ export default function StaffForm({ staff }: Props) {
           className="w-full text-sm border border-gray-300 rounded px-2 py-1.5"
         >
           <option value="active">active</option>
+          <option value="on_leave">on_leave</option>
           <option value="former">former</option>
         </select>
       </div>

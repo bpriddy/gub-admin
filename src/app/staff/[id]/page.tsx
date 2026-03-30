@@ -6,10 +6,13 @@ import StaffForm from '../StaffForm';
 export const dynamic = 'force-dynamic';
 
 export default async function StaffDetailPage({ params }: { params: { id: string } }) {
-  const staff = await prisma.staff.findUnique({
-    where: { id: params.id },
-    include: { user: { select: { id: true, email: true } } },
-  });
+  const [staff, offices] = await Promise.all([
+    prisma.staff.findUnique({
+      where: { id: params.id },
+      include: { user: { select: { id: true, email: true } } },
+    }),
+    prisma.office.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+  ]);
 
   if (!staff) notFound();
 
@@ -26,11 +29,7 @@ export default async function StaffDetailPage({ params }: { params: { id: string
         )}
       </div>
 
-      <StaffForm staff={{
-        ...staff,
-        startedAt: staff.startedAt,
-        endedAt: staff.endedAt,
-      }} />
+      <StaffForm staff={staff} offices={offices} />
     </div>
   );
 }

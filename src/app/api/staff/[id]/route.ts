@@ -11,10 +11,14 @@ const UpdateStaffSchema = z.object({
   startedAt: z.string().optional(),
   endedAt: z.string().nullable().optional(),
   userId: z.string().uuid().nullable().optional(),
+  officeId: z.string().uuid().nullable().optional(),
 });
 
 export async function GET(_: Request, { params }: { params: { id: string } }) {
-  const staff = await prisma.staff.findUnique({ where: { id: params.id } });
+  const staff = await prisma.staff.findUnique({
+    where: { id: params.id },
+    include: { office: { select: { id: true, name: true } } },
+  });
   if (!staff) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return NextResponse.json(staff);
 }
