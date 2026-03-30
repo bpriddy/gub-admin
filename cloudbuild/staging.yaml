@@ -1,46 +1,68 @@
+###############################################################################
+# Cloud Build — staging environment
+# Trigger: push to `staging` branch
+###############################################################################
+
+substitutions:
+  _REGION: us-central1
+  _AR_REPO: gub-admin
+  _SERVICE: gub-admin-staging
+  _DB_SECRET: gub-admin-db-url-staging
+  _CLOUDSQL_INSTANCE: gub-platform
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_MEDIUM
+
 steps:
-  - name: 'gcr.io/cloud-builders/docker'
+  # ── 1. Type check ─────────────────────────────────────────────────────────
+  - id: typecheck
+    name: node:20-alpine
+    entrypoint: sh
+    args:
+      - -c
+      - npm ci && npx tsc --noEmit
+
+  # ── 2. Build Docker image ─────────────────────────────────────────────────
+  - id: build
+    name: gcr.io/cloud-builders/docker
     args:
       - build
-      - '-t'
-      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/gub-admin:${SHORT_SHA}'
-      - '-t'
-      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/gub-admin:staging-latest'
-      - '.'
-    id: docker-build
+      - -t
+      - $_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/$_SERVICE:$SHORT_SHA
+      - -t
+      - $_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/$_SERVICE:latest
+      - .
+    waitFor: [typecheck]
 
-  - name: 'gcr.io/cloud-builders/docker'
+  # ── 3. Push image ─────────────────────────────────────────────────────────
+  - id: push
+    name: gcr.io/cloud-builders/docker
     args:
       - push
-      - '--all-tags'
-      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/gub-admin'
-    id: docker-push
-    waitFor: ['docker-build']
+      - --all-tags
+      - $_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/$_SERVICE
+    waitFor: [build]
 
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  # ── 4. Deploy to Cloud Run ────────────────────────────────────────────────
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
     args:
       - run
       - deploy
-      - gub-admin-staging
-      - '--image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/gub-admin:${SHORT_SHA}'
-      - '--region=${_REGION}'
-      - '--platform=managed'
-      - '--set-env-vars=DATABASE_URL=$$DATABASE_URL'
-      - '--service-account=${_SERVICE_ACCOUNT}'
-      - '--no-allow-unauthenticated'
-    secretEnv: ['DATABASE_URL']
-    waitFor: ['docker-push']
-
-substitutions:
-  _REGION: us-central1
-  _REPO: gub-admin
-  _SERVICE_ACCOUNT: gub-admin@${PROJECT_ID}.iam.gserviceaccount.com
-
-availableSecrets:
-  secretManager:
-    - versionName: projects/${PROJECT_ID}/secrets/gub-admin-db-url-staging/versions/latest
-      env: DATABASE_URL
-
-options:
-  logging: CLOUD_LOGGING_ONLY
+      - $_SERVICE
+      - --image=$_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/$_SERVICE:$SHORT_SHA
+      - --region=$_REGION
+      - --platform=managed
+      - --no-allow-unauthenticated
+      - --min-instances=0
+      - --max-instances=2
+      - --memory=512Mi
+      - --cpu=1
+      - --port=3000
+      - --service-account=sa-$_SERVICE@$PROJECT_ID.iam.gserviceaccount.com
+      - --set-env-vars=NODE_ENV=production,GCP_PROJECT_ID=$PROJECT_ID
+      - --set-secrets=DATABASE_URL=$_DB_SECRET:latest
+      - --add-cloudsql-instances=$PROJECT_ID:$_REGION:$_CLOUDSQL_INSTANCE
+    waitFor: [push]
