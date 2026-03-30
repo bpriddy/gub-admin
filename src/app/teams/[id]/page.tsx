@@ -6,7 +6,7 @@ import { use } from 'react';
 
 interface StaffOption { id: string; fullName: string; email: string; title: string | null; status: string; office: { name: string } | null; }
 interface Member { id: string; staffId: string; staff: StaffOption; }
-interface Team { id: string; name: string; description: string | null; members: Member[]; }
+interface Team { id: string; name: string; description: string | null; isActive: boolean; startedAt: string | null; members: Member[]; }
 
 export default function TeamDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -14,17 +14,20 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
   const [team, setTeam] = useState<Team | null>(null);
   const [allStaff, setAllStaff] = useState<StaffOption[]>([]);
   const [addStaffId, setAddStaffId] = useState('');
-  const [editName, setEditName] = useState('');
-  const [editDesc, setEditDesc] = useState('');
   const [editMode, setEditMode] = useState(false);
+  const [editState, setEditState] = useState({ name: '', description: '', isActive: true, startedAt: '' });
   const [saving, setSaving] = useState(false);
 
   async function loadTeam() {
     const res = await fetch(`/api/teams/${id}`);
     const data: Team = await res.json();
     setTeam(data);
-    setEditName(data.name);
-    setEditDesc(data.description ?? '');
+    setEditState({
+      name: data.name,
+      description: data.description ?? '',
+      isActive: data.isActive,
+      startedAt: data.startedAt ? data.startedAt.split('T')[0] : '',
+    });
   }
 
   async function loadStaff() {
@@ -39,7 +42,12 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
     await fetch(`/api/teams/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: editName, description: editDesc || null }),
+      body: JSON.stringify({
+        name: editState.name,
+        description: editState.description || null,
+        isActive: editState.isActive,
+        startedAt: editState.startedAt || null,
+      }),
     });
     setSaving(false);
     setEditMode(false);
@@ -85,8 +93,36 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
 
         {editMode ? (
           <div className="mt-3 space-y-3">
-            <input value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full text-xl font-semibold border-b border-gray-300 focus:outline-none pb-1" />
-            <input value={editDesc} onChange={(e) => setEditDesc(e.target.value)} placeholder="Description (optional)" className="w-full text-sm text-gray-500 border-b border-gray-200 focus:outline-none pb-1" />
+            <input
+              value={editState.name}
+              onChange={(e) => setEditState((s) => ({ ...s, name: e.target.value }))}
+              className="w-full text-xl font-semibold border-b border-gray-300 focus:outline-none pb-1"
+            />
+            <input
+              value={editState.description}
+              onChange={(e) => setEditState((s) => ({ ...s, description: e.target.value }))}
+              placeholder="Description (optional)"
+              className="w-full text-sm text-gray-500 border-b border-gray-200 focus:outline-none pb-1"
+            />
+            <div className="flex gap-4 items-center">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Date Started</label>
+                <input
+                  type="date"
+                  value={editState.startedAt}
+                  onChange={(e) => setEditState((s) => ({ ...s, startedAt: e.target.value }))}
+                  className="text-sm border border-gray-300 rounded px-2 py-1"
+                />
+              </div>
+              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer mt-4">
+                <input
+                  type="checkbox"
+                  checked={editState.isActive}
+                  onChange={(e) => setEditState((s) => ({ ...s, isActive: e.target.checked }))}
+                />
+                Active
+              </label>
+            </div>
             <div className="flex gap-2">
               <button onClick={handleSave} disabled={saving} className="text-sm px-3 py-1.5 bg-gray-900 text-white rounded hover:bg-gray-700 disabled:opacity-50">{saving ? 'Saving…' : 'Save'}</button>
               <button onClick={() => setEditMode(false)} className="text-sm px-3 py-1.5 border border-gray-300 rounded hover:bg-gray-50">Cancel</button>
@@ -95,8 +131,16 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
         ) : (
           <div className="mt-3 flex items-start justify-between">
             <div>
-              <h1 className="text-xl font-semibold">{team.name}</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-semibold">{team.name}</h1>
+                {team.isActive
+                  ? <span className="text-xs text-green-600">active</span>
+                  : <span className="text-xs text-gray-400">inactive</span>}
+              </div>
               {team.description && <p className="text-sm text-gray-500 mt-0.5">{team.description}</p>}
+              {team.startedAt && (
+                <p className="text-xs text-gray-400 mt-1">Started {team.startedAt.split('T')[0]}</p>
+              )}
             </div>
             <div className="flex gap-3">
               <button onClick={() => setEditMode(true)} className="text-sm text-gray-600 hover:underline">Edit</button>
@@ -111,7 +155,6 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
         <h2 className="font-medium text-sm text-gray-700">Members ({team.members.length})</h2>
       </div>
 
-      {/* Add member */}
       {available.length > 0 && (
         <form onSubmit={handleAddMember} className="flex gap-2 mb-4">
           <select

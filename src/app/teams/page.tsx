@@ -29,21 +29,31 @@ export default async function TeamsPage() {
             <tr>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Name</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Description</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Started</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Members</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {teams.length === 0 && (
-              <tr><td colSpan={3} className="px-4 py-6 text-center text-sm text-gray-400">No teams yet.</td></tr>
+              <tr><td colSpan={5} className="px-4 py-6 text-center text-sm text-gray-400">No teams yet.</td></tr>
             )}
             {teams.map((t) => (
-              <tr key={t.id} className="hover:bg-gray-50">
+              <tr key={t.id} className={`hover:bg-gray-50 ${!t.isActive ? 'opacity-60' : ''}`}>
                 <td className="px-4 py-3">
                   <Link href={`/teams/${t.id}`} className="text-blue-600 hover:underline font-medium">
                     {t.name}
                   </Link>
                 </td>
                 <td className="px-4 py-3 text-gray-500">{t.description ?? '—'}</td>
+                <td className="px-4 py-3 text-gray-500">
+                  {t.startedAt ? (t.startedAt as unknown as Date).toISOString().split('T')[0] : '—'}
+                </td>
+                <td className="px-4 py-3">
+                  {t.isActive
+                    ? <span className="text-xs text-green-600">active</span>
+                    : <span className="text-xs text-gray-400">inactive</span>}
+                </td>
                 <td className="px-4 py-3 text-gray-500">{t._count.members}</td>
               </tr>
             ))}

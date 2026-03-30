@@ -13,6 +13,8 @@ export async function GET() {
 const CreateTeamSchema = z.object({
   name: z.string().min(1),
   description: z.string().nullable().optional(),
+  isActive: z.boolean().default(true),
+  startedAt: z.string().nullable().optional(),
 });
 
 export async function POST(request: Request) {
@@ -20,6 +22,9 @@ export async function POST(request: Request) {
   const parsed = CreateTeamSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const team = await prisma.team.create({ data: { name: parsed.data.name, description: parsed.data.description ?? null } });
+  const { name, description, isActive, startedAt } = parsed.data;
+  const team = await prisma.team.create({
+    data: { name, description: description ?? null, isActive, ...(startedAt ? { startedAt: new Date(startedAt) } : {}) },
+  });
   return NextResponse.json(team, { status: 201 });
 }

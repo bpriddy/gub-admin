@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 
 export default function NewTeamPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ name: '', description: '' });
+  const [form, setForm] = useState({ name: '', description: '', isActive: true, startedAt: '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -16,7 +16,12 @@ export default function NewTeamPage() {
     const res = await fetch('/api/teams', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: form.name, description: form.description || null }),
+      body: JSON.stringify({
+        name: form.name,
+        description: form.description || null,
+        isActive: form.isActive,
+        startedAt: form.startedAt || null,
+      }),
     });
     setSaving(false);
     if (res.ok) {
@@ -51,6 +56,25 @@ export default function NewTeamPage() {
             onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
             className="w-full text-sm border border-gray-300 rounded px-2 py-1.5"
           />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Date Started</label>
+          <input
+            type="date"
+            value={form.startedAt}
+            onChange={(e) => setForm((f) => ({ ...f, startedAt: e.target.value }))}
+            className="w-full text-sm border border-gray-300 rounded px-2 py-1.5"
+          />
+        </div>
+        <div>
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={form.isActive}
+              onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))}
+            />
+            Active
+          </label>
         </div>
         {error && <p className="text-xs text-red-600">{error}</p>}
         <div className="flex gap-3 pt-2">

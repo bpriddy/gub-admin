@@ -4,6 +4,8 @@ import { z } from 'zod';
 
 const UpdateOfficeSchema = z.object({
   name: z.string().min(1).optional(),
+  isActive: z.boolean().optional(),
+  startedAt: z.string().nullable().optional(),
 });
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
@@ -11,7 +13,15 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   const parsed = UpdateOfficeSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const office = await prisma.office.update({ where: { id: params.id }, data: parsed.data });
+  const { name, isActive, startedAt } = parsed.data;
+  const office = await prisma.office.update({
+    where: { id: params.id },
+    data: {
+      ...(name !== undefined ? { name } : {}),
+      ...(isActive !== undefined ? { isActive } : {}),
+      ...(startedAt !== undefined ? { startedAt: startedAt ? new Date(startedAt) : null } : {}),
+    },
+  });
   return NextResponse.json(office);
 }
 
