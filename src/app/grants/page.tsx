@@ -4,6 +4,86 @@ import RevokeButton from './RevokeButton';
 
 export const dynamic = 'force-dynamic';
 
+const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+
+const STAFF_SCOPE_LABELS: Record<string, string> = {
+  staff_all: 'All staff',
+  staff_current: 'Current staff',
+};
+
+function ResourceCell({
+  resourceType,
+  resourceId,
+  officeNames,
+  teamNames,
+  accountNames,
+  campaignNames,
+}: {
+  resourceType: string;
+  resourceId: string;
+  officeNames: Map<string, string>;
+  teamNames: Map<string, string>;
+  accountNames: Map<string, string>;
+  campaignNames: Map<string, string>;
+}) {
+  // Scope-only grants (no meaningful resource)
+  if (resourceType in STAFF_SCOPE_LABELS) {
+    return (
+      <span className="text-xs text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">
+        {STAFF_SCOPE_LABELS[resourceType]}
+      </span>
+    );
+  }
+
+  if (resourceType === 'staff_office') {
+    const name = officeNames.get(resourceId);
+    return (
+      <span className="text-xs">
+        <span className="text-gray-400 mr-1">office</span>
+        <span className="text-gray-700">{name ?? resourceId.split('-')[0] + '…'}</span>
+      </span>
+    );
+  }
+
+  if (resourceType === 'staff_team') {
+    const name = teamNames.get(resourceId);
+    return (
+      <span className="text-xs">
+        <span className="text-gray-400 mr-1">team</span>
+        <span className="text-gray-700">{name ?? resourceId.split('-')[0] + '…'}</span>
+      </span>
+    );
+  }
+
+  if (resourceType === 'account') {
+    const name = accountNames.get(resourceId);
+    return (
+      <span className="text-xs">
+        <span className="text-gray-400 mr-1">account</span>
+        <span className="text-gray-700">{name ?? resourceId.split('-')[0] + '…'}</span>
+      </span>
+    );
+  }
+
+  if (resourceType === 'campaign') {
+    const name = campaignNames.get(resourceId);
+    return (
+      <span className="text-xs">
+        <span className="text-gray-400 mr-1">campaign</span>
+        <span className="text-gray-700">{name ?? resourceId.split('-')[0] + '…'}</span>
+      </span>
+    );
+  }
+
+  // Fallback
+  return (
+    <span className="text-xs">
+      <span className="text-gray-400 mr-1">{resourceType}</span>
+      <span className="font-mono text-gray-600">{resourceId.split('-')[0]}…</span>
+    </span>
+  );
+}
+
 export default async function GrantsPage({
   searchParams,
 }: {
@@ -11,17 +91,28 @@ export default async function GrantsPage({
 }) {
   const showAll = searchParams.all === 'true';
 
-  const grants = await prisma.accessGrant.findMany({
-    where: {
-      ...(searchParams.userId ? { userId: searchParams.userId } : {}),
-      ...(showAll ? {} : { revokedAt: null }),
-    },
-    orderBy: { grantedAt: 'desc' },
-    include: {
-      user: { select: { id: true, email: true } },
-      grantedByStaff: { select: { fullName: true } },
-    },
-  });
+  const [grants, offices, teams, accounts, campaigns] = await Promise.all([
+    prisma.accessGrant.findMany({
+      where: {
+        ...(searchParams.userId ? { userId: searchParams.userId } : {}),
+        ...(showAll ? {} : { revokedAt: null }),
+      },
+      orderBy: { grantedAt: 'desc' },
+      include: {
+        user: { select: { id: true, email: true } },
+        grantedByStaff: { select: { fullName: true } },
+      },
+    }),
+    prisma.office.findMany({ select: { id: true, name: true } }),
+    prisma.team.findMany({ select: { id: true, name: true } }),
+    prisma.account.findMany({ select: { id: true, name: true } }),
+    prisma.campaign.findMany({ select: { id: true, name: true } }),
+  ]);
+
+  const officeNames = new Map(offices.map((o) => [o.id, o.name]));
+  const teamNames = new Map(teams.map((t) => [t.id, t.name]));
+  const accountNames = new Map(accounts.map((a) => [a.id, a.name]));
+  const campaignNames = new Map(campaigns.map((c) => [c.id, c.name]));
 
   return (
     <div>
@@ -41,6 +132,12 @@ export default async function GrantsPage({
             className="text-sm text-gray-500 hover:text-gray-700"
           >
             {showAll ? 'Active only' : 'Show all'}
+          </Link>
+          <Link
+            href="/grants/staff"
+            className="text-sm px-3 py-1.5 border border-gray-300 rounded hover:bg-gray-50"
+          >
+            Staff Grant
           </Link>
           <Link
             href="/grants/batch"
@@ -73,8 +170,14 @@ export default async function GrantsPage({
                   </Link>
                 </td>
                 <td className="px-4 py-3">
-                  <span className="text-xs text-gray-400 mr-1">{g.resourceType}</span>
-                  <span className="text-xs font-mono text-gray-600">{g.resourceId.split('-')[0]}…</span>
+                  <ResourceCell
+                    resourceType={g.resourceType}
+                    resourceId={g.resourceId}
+                    officeNames={officeNames}
+                    teamNames={teamNames}
+                    accountNames={accountNames}
+                    campaignNames={campaignNames}
+                  />
                 </td>
                 <td className="px-4 py-3 text-gray-700">{g.role}</td>
                 <td className="px-4 py-3 text-gray-500 text-xs">{g.grantedByStaff.fullName}</td>
@@ -84,6 +187,8 @@ export default async function GrantsPage({
                 <td className="px-4 py-3">
                   {g.revokedAt ? (
                     <span className="text-xs text-gray-400">revoked</span>
+                  ) : g.expiresAt && g.expiresAt < new Date() ? (
+                    <span className="text-xs text-amber-600">expired</span>
                   ) : (
                     <span className="text-xs text-green-600">active</span>
                   )}
