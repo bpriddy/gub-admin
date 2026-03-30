@@ -22,6 +22,8 @@ export const metadata: Metadata = {
 const navLinks = [
   { href: '/users', label: 'Users' },
   { href: '/staff', label: 'Staff' },
+  { href: '/offices', label: 'Offices' },
+  { href: '/teams', label: 'Teams' },
   { href: '/accounts', label: 'Accounts' },
   { href: '/campaigns', label: 'Campaigns' },
   { href: '/grants', label: 'Access Grants' },
