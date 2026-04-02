@@ -12,30 +12,42 @@ const BatchGrantSchema = z.object({
   expiresAt: z.string().nullable().optional(),
 });
 
-async function upsertGrant(opts: {
-  userId: string;
-  resourceType: string;
-  resourceId: string;
-  role: string;
-  grantedBy: string;
-  expiresAt: Date | null;
-}) {
+interface UpsertResult {
+  id: string;
+  isNew: boolean;
+  previousRole: string | null;
+  previousExpiresAt: Date | null;
+}
+
+async function upsertGrant(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  opts: {
+    userId: string;
+    resourceType: string;
+    resourceId: string;
+    role: string;
+    grantedBy: string;
+    expiresAt: Date | null;
+  },
+): Promise<UpsertResult> {
   const { userId, resourceType, resourceId, role, grantedBy, expiresAt } = opts;
 
-  const existing = await prisma.accessGrant.findFirst({
+  const existing = await tx.accessGrant.findFirst({
     where: { userId, resourceType, resourceId, revokedAt: null },
   });
 
   if (existing) {
-    return prisma.accessGrant.update({
+    await tx.accessGrant.update({
       where: { id: existing.id },
-      data: { role, expiresAt },
+      data: { role, expiresAt, grantedBy, grantedAt: new Date() },
     });
+    return { id: existing.id, isNew: false, previousRole: existing.role, previousExpiresAt: existing.expiresAt };
   }
 
-  return prisma.accessGrant.create({
+  const created = await tx.accessGrant.create({
     data: { userId, resourceType, resourceId, role, grantedBy, expiresAt },
   });
+  return { id: created.id, isNew: true, previousRole: null, previousExpiresAt: null };
 }
 
 export async function POST(request: Request) {
@@ -64,11 +76,35 @@ export async function POST(request: Request) {
     ...resolvedCampaignIds.map((id) => ({ resourceType: 'campaign', resourceId: id })),
   ];
 
-  const grants = await Promise.all(
-    resources.map(({ resourceType, resourceId }) =>
-      upsertGrant({ userId, resourceType, resourceId, role, grantedBy, expiresAt: expiresAtDate })
-    )
-  );
+  const grants = await prisma.$transaction(async (tx) => {
+    const results: { id: string }[] = [];
+
+    for (const { resourceType, resourceId } of resources) {
+      const result = await upsertGrant(tx, {
+        userId,
+        resourceType,
+        resourceId,
+        role,
+        grantedBy,
+        expiresAt: expiresAtDate,
+      });
+
+      await tx.auditLog.create({
+        data: {
+          action: result.isNew ? 'grant_created' : 'grant_updated',
+          entityType: 'access_grant',
+          entityId: result.id,
+          actorId: grantedBy,
+          ...(result.isNew ? {} : { before: { role: result.previousRole, expiresAt: result.previousExpiresAt } }),
+          after: { userId, resourceType, resourceId, role, expiresAt: expiresAtDate },
+        },
+      });
+
+      results.push({ id: result.id });
+    }
+
+    return results;
+  });
 
   return NextResponse.json({ granted: grants.length, grants }, { status: 201 });
 }

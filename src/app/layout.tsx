@@ -27,6 +27,11 @@ const navLinks = [
   { href: '/accounts', label: 'Accounts' },
   { href: '/campaigns', label: 'Campaigns' },
   { href: '/grants', label: 'Access Grants' },
+  { href: '/access-requests', label: 'Access Requests' },
+  { href: '/apps', label: 'Apps' },
+  { href: '/app-access-requests', label: 'App Requests' },
+  { href: '/resourcing', label: 'Resourcing' },
+  { href: '/oauth-clients', label: 'OAuth Clients' },
 ];
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

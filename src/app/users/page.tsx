@@ -20,7 +20,15 @@ export default async function UsersPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold mb-6">Users</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-xl font-semibold">Users</h1>
+        <Link
+          href="/users/new"
+          className="text-sm bg-gray-900 text-white px-3 py-1.5 rounded hover:bg-gray-700"
+        >
+          + Add User
+        </Link>
+      </div>
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">

@@ -7,6 +7,7 @@ import { use } from 'react';
 interface Office {
   id: string;
   name: string;
+  oktaCity: string | null;
   isActive: boolean;
   startedAt: string | null;
 }
@@ -22,6 +23,7 @@ interface ChangeEntry {
 
 const PROP_LABELS: Record<string, string> = {
   name: 'Name',
+  okta_city: 'Okta city',
   is_active: 'Active',
   started_at: 'Date started',
 };
@@ -38,7 +40,7 @@ export default function OfficeDetailPage({ params }: { params: Promise<{ id: str
   const [office, setOffice] = useState<Office | null>(null);
   const [changes, setChanges] = useState<ChangeEntry[]>([]);
   const [editMode, setEditMode] = useState(false);
-  const [editState, setEditState] = useState({ name: '', isActive: true, startedAt: '' });
+  const [editState, setEditState] = useState({ name: '', oktaCity: '', isActive: true, startedAt: '' });
   const [saving, setSaving] = useState(false);
 
   async function loadOffice() {
@@ -50,6 +52,7 @@ export default function OfficeDetailPage({ params }: { params: Promise<{ id: str
     if (found) {
       setEditState({
         name: found.name,
+        oktaCity: found.oktaCity ?? '',
         isActive: found.isActive,
         startedAt: found.startedAt ? found.startedAt.split('T')[0] : '',
       });
@@ -70,6 +73,7 @@ export default function OfficeDetailPage({ params }: { params: Promise<{ id: str
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: editState.name,
+        oktaCity: editState.oktaCity || null,
         isActive: editState.isActive,
         startedAt: editState.startedAt || null,
       }),
@@ -94,6 +98,16 @@ export default function OfficeDetailPage({ params }: { params: Promise<{ id: str
               onChange={(e) => setEditState((s) => ({ ...s, name: e.target.value }))}
               className="w-full text-xl font-semibold border-b border-gray-300 focus:outline-none pb-1"
             />
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Okta city</label>
+              <input
+                value={editState.oktaCity}
+                onChange={(e) => setEditState((s) => ({ ...s, oktaCity: e.target.value }))}
+                placeholder="e.g. New York"
+                className="w-full text-sm border border-gray-300 rounded px-2 py-1 font-mono"
+                title="Must match the profile.city value in Okta exactly"
+              />
+            </div>
             <div className="flex gap-4 items-center">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Date Started</label>
@@ -130,6 +144,10 @@ export default function OfficeDetailPage({ params }: { params: Promise<{ id: str
               {office.startedAt && (
                 <p className="text-xs text-gray-400 mt-1">Started {office.startedAt.split('T')[0]}</p>
               )}
+              {office.oktaCity
+                ? <p className="text-xs mt-1">Okta city: <span className="font-mono text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded">{office.oktaCity}</span></p>
+                : <p className="text-xs text-gray-300 mt-1">No Okta city mapped</p>
+              }
             </div>
             <button onClick={() => setEditMode(true)} className="text-sm text-gray-600 hover:underline">Edit</button>
           </div>
