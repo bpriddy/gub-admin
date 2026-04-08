@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic';
+
 // Returns all distinct type+label pairs accumulated in staff_metadata.
 // Used to power datalist suggestions in the editor — vocabulary grows
 // automatically as new entries are added, no explicit taxonomy needed.
