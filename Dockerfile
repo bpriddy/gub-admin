@@ -11,6 +11,9 @@ COPY prisma ./prisma
 RUN npx prisma generate
 
 COPY . .
+# Dummy DATABASE_URL so Next.js static generation doesn't fail at build time.
+# The real URL is injected at runtime via Cloud Run secrets.
+ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
 RUN npm run build
 
 # ── Runtime stage ────────────────────────────────────────────────────────────
