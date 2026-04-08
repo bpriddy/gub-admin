@@ -28,7 +28,6 @@ ENV PORT=8080
 # Next.js standalone output
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
 
 # Prisma client for runtime
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
