@@ -9,6 +9,7 @@ substitutions:
   _SERVICE: gub-admin-dev
   _DB_SECRET: gub-admin-db-url-dev
   _CLOUDSQL_INSTANCE: gub-platform
+  _GUB_BACKEND_URL: https://gcp-universal-backend-dev-843516467880.us-central1.run.app
 
 options:
   logging: CLOUD_LOGGING_ONLY
@@ -62,7 +63,7 @@ steps:
       - --cpu=1
       - --port=3000
       - --service-account=sa-$_SERVICE@$PROJECT_ID.iam.gserviceaccount.com
-      - --set-env-vars=NODE_ENV=development,GCP_PROJECT_ID=$PROJECT_ID
+      - --set-env-vars=NODE_ENV=development,GCP_PROJECT_ID=$PROJECT_ID,GUB_BACKEND_URL=$_GUB_BACKEND_URL
       - --set-secrets=DATABASE_URL=$_DB_SECRET:latest
       - --add-cloudsql-instances=$PROJECT_ID:$_REGION:$_CLOUDSQL_INSTANCE
     waitFor: [push]

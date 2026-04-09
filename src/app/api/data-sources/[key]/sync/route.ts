@@ -9,7 +9,7 @@ const SYNC_ENDPOINTS: Record<string, string> = {
   google_directory: '/integrations/google-directory/cron',
 };
 
-const GUB_URL = process.env['NEXT_PUBLIC_GUB_URL'] ?? 'http://localhost:3000';
+const GUB_URL = process.env['GUB_BACKEND_URL'] ?? process.env['NEXT_PUBLIC_GUB_URL'] ?? 'http://localhost:3000';
 
 export async function POST(_request: Request, { params }: { params: { key: string } }) {
   const source = await prisma.dataSource.findUnique({ where: { key: params.key } });
