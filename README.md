@@ -1,36 +1,90 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# gub-admin
+
+Admin CMS for the GCP Universal Backend platform. Built with Next.js 14
+(App Router), Prisma ORM, and Tailwind CSS. Connects directly to the
+shared Cloud SQL PostgreSQL database with `BYPASSRLS` access, gated by
+Google Cloud IAP at the network layer.
+
+> **POC Status:** This is part of a working proof of concept across three
+> repos. See the [backend docs](https://github.com/bpriddy/gcp-universal-backend/tree/main/docs)
+> for comprehensive documentation.
+
+## Features
+
+| Section | Path | Description |
+|---------|------|-------------|
+| Staff | `/staff` | View and manage staff records, metadata, external IDs |
+| Accounts | `/accounts` | Client accounts with change history |
+| Campaigns | `/campaigns` | Campaign management with change logs |
+| Apps | `/apps` | App registration and permission management |
+| App Requests | `/app-access-requests` | Access request review workflow |
+| Resourcing | `/resourcing` | Search staff by skills, interests, certifications |
+| Data Sources | `/data-sources` | Sync configuration, run history, run details |
+| OAuth Clients | `/oauth-clients` | OAuth client management |
+
+## Data Sources Dashboard
+
+The Data Sources section provides visibility into automated data sync:
+
+- **List view** — All configured sources with status, human-readable schedule,
+  last sync time, and run counts. Coming-soon sources (Workfront, Google Drive,
+  Staff Metadata Import) are dimmed with a badge.
+- **Detail view** — Per-source configuration with a friendly dropdown-based
+  schedule builder (frequency, day, time) instead of raw cron expressions.
+  Includes a run history table with status and counters.
+- **Run detail view** — Counter cards (scanned, created, updated, unchanged,
+  skipped, errored), pre-rendered summary, changes table with inline diffs,
+  skipped entries grouped by reason, and errors table.
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 20+ (managed via nvm)
+- Access to the shared PostgreSQL database
+
+### Setup
+
+```bash
+git clone https://github.com/bpriddy/gub-admin.git
+cd gub-admin
+npm install
+```
+
+### Environment
+
+Create a `.env` file:
+
+```env
+DATABASE_URL=postgresql://user:password@localhost:5432/gcp_auth
+```
+
+### Run locally
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Opens on [http://localhost:3001](http://localhost:3001).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Build
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+npm start
+```
 
-## Learn More
+## Tech Stack
 
-To learn more about Next.js, take a look at the following resources:
+- **Next.js 14** — App Router, server components, standalone output
+- **Prisma ORM** — Direct database queries from server components
+- **Tailwind CSS** — Utility-first styling
+- **Zod v4** — Request validation
+- **TypeScript** — Strict mode with `exactOptionalPropertyTypes`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Related Repositories
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Repo | Purpose |
+|------|---------|
+| [gcp-universal-backend](https://github.com/bpriddy/gcp-universal-backend) | Auth gateway + org data API + sync engines |
+| [gub-agent](https://github.com/bpriddy/gub-agent) | ADK agent for Vertex AI Agent Engine / Agentspace |

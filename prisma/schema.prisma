@@ -515,3 +515,44 @@ model StaffMetadata {
   @@index([type, value])
   @@map("staff_metadata")
 }
+
+// ── Sync runs ─────────────────────────────────────────────────────────────
+
+model DataSource {
+  id           String    @id @default(uuid()) @db.Uuid
+  key          String    @unique
+  name         String
+  description  String?   @db.Text
+  isActive     Boolean   @default(true) @map("is_active")
+  syncInterval String    @default("daily") @map("sync_interval")
+  cronSchedule String?   @map("cron_schedule")
+  lastSyncAt   DateTime? @map("last_sync_at") @db.Timestamptz
+  lastStatus   String?   @map("last_status")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("data_sources")
+}
+
+model SyncRun {
+  id          String    @id @default(uuid()) @db.Uuid
+  source      String
+  status      String    @default("running")
+  startedAt   DateTime  @default(now()) @map("started_at") @db.Timestamptz
+  completedAt DateTime? @map("completed_at") @db.Timestamptz
+  durationMs  Int?      @map("duration_ms")
+
+  totalScanned Int @default(0) @map("total_scanned")
+  created      Int @default(0)
+  updated      Int @default(0)
+  unchanged    Int @default(0)
+  skipped      Int @default(0)
+  errored      Int @default(0)
+
+  details Json?
+  summary String? @db.Text
+
+  @@index([source, startedAt(sort: Desc)])
+  @@index([status])
+  @@map("sync_runs")
+}

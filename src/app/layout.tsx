@@ -31,6 +31,7 @@ const navLinks = [
   { href: '/apps', label: 'Apps' },
   { href: '/app-access-requests', label: 'App Requests' },
   { href: '/resourcing', label: 'Resourcing' },
+  { href: '/data-sources', label: 'Data Sources' },
   { href: '/oauth-clients', label: 'OAuth Clients' },
 ];
 
