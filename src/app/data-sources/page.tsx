@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
+import { SyncButton } from './[key]/sync-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -159,6 +160,7 @@ export default async function DataSourcesPage() {
                       <div className="text-gray-400 text-xs">Runs</div>
                       <div className="text-gray-700 tabular-nums">{runs}</div>
                     </div>
+                    <SyncButton sourceKey={source.key} compact />
                     <Link
                       href={`/data-sources/${source.key}`}
                       className="text-sm px-3 py-1.5 bg-gray-900 text-white rounded hover:bg-gray-700"

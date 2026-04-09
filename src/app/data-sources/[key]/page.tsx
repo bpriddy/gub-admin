@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { IntervalForm } from './interval-form';
+import { SyncButton } from './sync-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,6 +57,7 @@ export default async function DataSourceDetailPage({ params }: { params: { key: 
             <p className="text-sm text-gray-500 mt-1 max-w-2xl">{source.description}</p>
           )}
         </div>
+        <SyncButton sourceKey={params.key} />
       </div>
 
       {/* Config panel */}
