@@ -7,6 +7,12 @@ import { prisma } from '@/lib/prisma';
  */
 const SYNC_ENDPOINTS: Record<string, string> = {
   google_directory: '/integrations/google-directory/cron',
+  // Note: the Drive endpoint on the backend is `authenticate + requireAdmin`;
+  // google-directory/cron is unauthenticated. Until that inconsistency is
+  // resolved (shared secret, service-to-service IAM, or dropping auth to
+  // match), triggering Drive from this proxy will 401. Flagged as an open
+  // item — see DriveSync plan memory.
+  google_drive: '/integrations/google-drive/run-full-sync',
 };
 
 const GUB_URL = process.env['GUB_BACKEND_URL'] ?? process.env['NEXT_PUBLIC_GUB_URL'] ?? 'http://localhost:3000';

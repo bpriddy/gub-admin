@@ -4,7 +4,7 @@ import { SyncButton } from './[key]/sync-button';
 
 export const dynamic = 'force-dynamic';
 
-const COMING_SOON_SOURCES = new Set(['workfront', 'google_drive', 'staff_metadata_import']);
+const COMING_SOON_SOURCES = new Set(['workfront', 'staff_metadata_import']);
 
 const DAYS_OF_WEEK: Record<string, string> = {
   '0': 'Sunday', '1': 'Monday', '2': 'Tuesday', '3': 'Wednesday',
