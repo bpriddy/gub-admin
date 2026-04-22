@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { use } from 'react';
 
 interface StaffOption { id: string; fullName: string; email: string; title: string | null; status: string; office: { name: string } | null; }
 interface Member { id: string; staffId: string; staff: StaffOption; }
@@ -18,8 +17,8 @@ function formatValue(property: string, valueText: string | null, valueDate: stri
   return valueText ?? '—';
 }
 
-export default function TeamDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function TeamDetailPage({ params }: { params: { id: string } }) {
+  const { id } = params;
   const router = useRouter();
   const [team, setTeam] = useState<Team | null>(null);
   const [allStaff, setAllStaff] = useState<StaffOption[]>([]);

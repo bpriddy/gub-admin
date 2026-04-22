@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { use } from 'react';
 
 interface Office {
   id: string;
@@ -34,8 +33,8 @@ function formatValue(property: string, valueText: string | null, valueDate: stri
   return valueText ?? '—';
 }
 
-export default function OfficeDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function OfficeDetailPage({ params }: { params: { id: string } }) {
+  const { id } = params;
   const router = useRouter();
   const [office, setOffice] = useState<Office | null>(null);
   const [changes, setChanges] = useState<ChangeEntry[]>([]);
