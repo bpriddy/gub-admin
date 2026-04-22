@@ -31,9 +31,12 @@ interface Props {
 export function RunDuration({ startedAt, durationMs, status, className }: Props) {
   const isLive = status === 'running' && durationMs === null;
 
-  const [liveMs, setLiveMs] = useState<number>(() =>
-    Math.max(0, Date.now() - new Date(startedAt).getTime()),
-  );
+  // SSR-safe: on the server we have no wallclock, so initialize to null.
+  // The client swaps in the live value once useEffect mounts. The wrapping
+  // span uses suppressHydrationWarning because the text is deliberately
+  // different between server and client — this is React's documented
+  // escape hatch for clock-like components.
+  const [liveMs, setLiveMs] = useState<number | null>(null);
 
   useEffect(() => {
     if (!isLive) return;
@@ -43,12 +46,17 @@ export function RunDuration({ startedAt, durationMs, status, className }: Props)
     return () => clearInterval(id);
   }, [isLive, startedAt]);
 
+  // Pre-hydration render for a running row: show a dash. Post-hydration the
+  // useEffect above fills in the live value.
   const displayMs = isLive ? liveMs : durationMs;
-  if (displayMs === null) return <span className={className}>—</span>;
 
   return (
-    <span className={`tabular-nums ${className ?? ''}`} title={isLive ? 'running — live' : undefined}>
-      {formatDuration(displayMs)}
+    <span
+      className={`tabular-nums ${className ?? ''}`}
+      title={isLive ? 'running — live' : undefined}
+      suppressHydrationWarning
+    >
+      {displayMs === null ? '—' : formatDuration(displayMs)}
       {isLive && <span aria-hidden className="ml-1 text-amber-500">•</span>}
     </span>
   );
