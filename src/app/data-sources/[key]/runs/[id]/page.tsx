@@ -16,6 +16,10 @@ interface SkipEntry {
   name: string;
   reason: string;
   detail: string;
+  /** Which layer decided — 'hard_filter' | 'llm' | 'sync_rule'. */
+  source?: 'hard_filter' | 'llm' | 'sync_rule';
+  /** 0–1 when source='llm'. */
+  confidence?: number;
 }
 
 interface ChangeEntry {
@@ -31,10 +35,25 @@ interface ErrorEntry {
   error: string;
 }
 
+interface ClassifierAudit {
+  totalInput: number;
+  syncRuleHits: number;
+  hardFilterSkips: number;
+  llmInputs: number;
+  llmBatches: number;
+  llmRetries: number;
+  llmFallbacks: number;
+  llmDurationMs: number;
+  llmKeptAsPerson: number;
+  llmSkippedAsService: number;
+  llmKept: Array<{ email: string; reason: string; confidence: number }>;
+}
+
 interface SyncDetails {
   skipped?: SkipEntry[];
   changes?: ChangeEntry[];
   errors?: ErrorEntry[];
+  classifier?: ClassifierAudit;
 }
 
 function groupBy<T>(items: T[], keyFn: (item: T) => string): Record<string, T[]> {
@@ -63,7 +82,15 @@ export default async function SyncRunDetailPage({ params }: { params: { key: str
   const skipped = details.skipped ?? [];
   const changes = details.changes ?? [];
   const errors = details.errors ?? [];
+  const classifier = details.classifier;
   const skipsByReason = groupBy(skipped, (s) => s.reason);
+
+  // For the Kept section: sort by confidence ASC so the model's least-certain
+  // 'person' decisions float to the top — those are the candidates for a
+  // future sync_rules override.
+  const kept = classifier?.llmKept
+    ? [...classifier.llmKept].sort((a, b) => a.confidence - b.confidence)
+    : [];
 
   const sourceLabel = SOURCE_LABELS[run.source] ?? run.source;
 
@@ -184,6 +211,41 @@ export default async function SyncRunDetailPage({ params }: { params: { key: str
         </div>
       )}
 
+      {/* Kept as person (LLM) — scrollable, mirrors the Skipped layout */}
+      {kept.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-sm font-semibold text-gray-700 mb-2">
+            Kept as person — LLM ({kept.length})
+          </h2>
+          <div className="bg-white border border-gray-200 rounded-lg">
+            <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-700">
+                Sorted by confidence ascending
+              </span>
+              <span className="text-xs text-gray-400 tabular-nums">{kept.length}</span>
+            </div>
+            <div className="px-4 py-2 max-h-60 overflow-y-auto">
+              {kept.map((k, i) => (
+                <div key={i} className="py-1 text-sm flex items-baseline gap-3">
+                  <span className="text-gray-700 truncate" style={{ minWidth: '220px' }}>
+                    {k.email}
+                  </span>
+                  <span
+                    className={`text-xs tabular-nums ${
+                      k.confidence < 0.7 ? 'text-amber-600' : 'text-gray-400'
+                    }`}
+                    style={{ minWidth: '40px' }}
+                  >
+                    {k.confidence.toFixed(2)}
+                  </span>
+                  <span className="text-gray-500 text-xs truncate">{k.reason}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Skipped — grouped by reason */}
       {skipped.length > 0 && (
         <div className="mb-8">
@@ -204,10 +266,25 @@ export default async function SyncRunDetailPage({ params }: { params: { key: str
                   <div className="px-4 py-2 max-h-60 overflow-y-auto">
                     {entries.map((entry, i) => (
                       <div key={i} className="py-1 text-sm flex items-baseline gap-3">
-                        <span className="text-gray-500 truncate" style={{ minWidth: '180px' }}>
+                        <span className="text-gray-700 truncate" style={{ minWidth: '180px' }}>
                           {entry.name || '(no name)'}
                         </span>
-                        <span className="text-gray-400 text-xs truncate">{entry.email}</span>
+                        <span className="text-gray-400 text-xs truncate" style={{ minWidth: '180px' }}>
+                          {entry.email}
+                        </span>
+                        {entry.source === 'llm' && typeof entry.confidence === 'number' && (
+                          <span
+                            className={`text-xs tabular-nums ${
+                              entry.confidence < 0.7 ? 'text-amber-600' : 'text-gray-400'
+                            }`}
+                            style={{ minWidth: '40px' }}
+                          >
+                            {entry.confidence.toFixed(2)}
+                          </span>
+                        )}
+                        {entry.source === 'llm' && entry.detail && (
+                          <span className="text-gray-500 text-xs truncate">{entry.detail}</span>
+                        )}
                       </div>
                     ))}
                   </div>
