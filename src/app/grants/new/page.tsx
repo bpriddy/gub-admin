@@ -37,9 +37,15 @@ export default async function NewGrantPage() {
     <div className="max-w-xl">
       <h1 className="text-xl font-semibold mb-2">New Grant</h1>
       <p className="text-sm text-gray-500 mb-6">
-        Grant a user access to any resource or capability. Use functional grants (e.g.{' '}
-        <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">func:temporal</code>) for
-        cross-cutting permissions like historical data access.
+        Grant a user access to any resource or capability. For offices and teams you can grant a
+        specific record, or a cohort — <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">all</code>{' '}
+        (every record) or <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">active</code>{' '}
+        (only <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">is_active = true</code>, recommended for
+        most staff so short-lived or closed records stay hidden). For staff scopes, use{' '}
+        <a href="/grants/staff" className="text-blue-600 hover:underline">the dedicated staff grant form</a>.
+        Functional grants like{' '}
+        <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">func:temporal</code> are for
+        cross-cutting capabilities.
       </p>
       <NewGrantForm
         users={users}

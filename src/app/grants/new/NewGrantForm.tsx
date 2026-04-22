@@ -65,10 +65,37 @@ type Props = {
 
 const ENTITY_ROLES = ['viewer', 'contributor', 'manager', 'admin'];
 
+// Scope grants for offices and teams. `specific` means "this single record"
+// (uses entity type `office` or `team` + resourceId). `all` and `active` are
+// cohort grants (no resourceId — the resourceType itself encodes the cohort).
+//
+//   office + specific  → resourceType='office',          resourceId=<uuid>
+//   office + all       → resourceType='office_all',      resourceId=null
+//   office + active    → resourceType='office_active',   resourceId=null
+//   team   + specific  → resourceType='team',            resourceId=<uuid>
+//   team   + all       → resourceType='team_all',        resourceId=null
+//   team   + active    → resourceType='team_active',     resourceId=null
+type EntityScope = 'specific' | 'all' | 'active';
+
+const SCOPE_OPTIONS: { value: EntityScope; label: string; description: string }[] = [
+  { value: 'specific', label: 'Specific',        description: 'One record you pick below' },
+  { value: 'all',      label: 'All',             description: 'Every record, including inactive/closed' },
+  { value: 'active',   label: 'Active only',     description: 'Only records where is_active = true (recommended for broad staff)' },
+];
+
+function resolveResourceType(entityType: EntityTypeName, scope: EntityScope): string {
+  if (scope === 'specific') return entityType; // 'account' | 'campaign' | 'office' | 'team'
+  if (entityType === 'office') return scope === 'all' ? 'office_all' : 'office_active';
+  if (entityType === 'team')   return scope === 'all' ? 'team_all'   : 'team_active';
+  // account / campaign don't have cohort grants; fall back to specific
+  return entityType;
+}
+
 export default function NewGrantForm({ users, staff, accounts, campaigns, offices, teams }: Props) {
   const router = useRouter();
   const [category, setCategory] = useState<GrantCategory>('entity');
   const [entityType, setEntityType] = useState<EntityTypeName>('account');
+  const [scope, setScope] = useState<EntityScope>('specific');
   const [functionalType, setFunctionalType] = useState<FunctionalTypeName>('func:temporal');
   const [form, setForm] = useState({
     userId: '',
@@ -82,7 +109,10 @@ export default function NewGrantForm({ users, staff, accounts, campaigns, office
   const [error, setError] = useState('');
 
   const funcDef = FUNCTIONAL_TYPES.find((f) => f.value === functionalType)!;
-  const resourceType = category === 'entity' ? entityType : functionalType;
+  const resourceType =
+    category === 'entity' ? resolveResourceType(entityType, scope) : functionalType;
+  const scopeSupported = entityType === 'office' || entityType === 'team';
+  const needsResourceId = category === 'entity' && scope === 'specific';
 
   const resourceOptions: Resource[] =
     entityType === 'account'  ? accounts  :
@@ -97,7 +127,16 @@ export default function NewGrantForm({ users, staff, accounts, campaigns, office
 
   function handleEntityTypeChange(t: EntityTypeName) {
     setEntityType(t);
+    // account + campaign don't support cohort scopes; force 'specific' so the
+    // form submits the right resourceType.
+    if (t === 'account' || t === 'campaign') setScope('specific');
     setForm((f) => ({ ...f, resourceId: '' }));
+  }
+
+  function handleScopeChange(s: EntityScope) {
+    setScope(s);
+    // Cohort scopes don't use resourceId.
+    if (s !== 'specific') setForm((f) => ({ ...f, resourceId: '' }));
   }
 
   function handleFunctionalTypeChange(t: FunctionalTypeName) {
@@ -108,7 +147,7 @@ export default function NewGrantForm({ users, staff, accounts, campaigns, office
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (category === 'entity' && !form.resourceId) {
+    if (needsResourceId && !form.resourceId) {
       setError('Please select a resource.');
       return;
     }
@@ -122,7 +161,10 @@ export default function NewGrantForm({ users, staff, accounts, campaigns, office
       body: JSON.stringify({
         userId: form.userId,
         resourceType,
-        resourceId: category === 'entity' ? form.resourceId : undefined,
+        // Only include resourceId for 'specific' scope. Cohort grants
+        // (office_all, office_active, team_all, team_active) rely on the
+        // API's nil-UUID default.
+        resourceId: needsResourceId ? form.resourceId : undefined,
         role: form.role,
         grantedBy: form.grantedBy,
         expiresAt: form.expiresAt || null,
@@ -183,26 +225,56 @@ export default function NewGrantForm({ users, staff, accounts, campaigns, office
               ))}
             </div>
           </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">
-              {ENTITY_TYPES.find((t) => t.value === entityType)?.label} *
-            </label>
-            {resourceOptions.length === 0 ? (
-              <p className="text-sm text-gray-400 italic">No {entityType}s found.</p>
-            ) : (
-              <select
-                value={form.resourceId}
-                onChange={(e) => setForm((f) => ({ ...f, resourceId: e.target.value }))}
-                className="w-full text-sm border border-gray-300 rounded px-2 py-1.5"
-                required
-              >
-                <option value="">— select —</option>
-                {resourceOptions.map((r) => (
-                  <option key={r.id} value={r.id}>{r.name}</option>
+          {/* Scope — only applies to offices and teams (cohort grants) */}
+          {scopeSupported && (
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Scope *</label>
+              <div className="space-y-1.5">
+                {SCOPE_OPTIONS.map(({ value, label, description }) => (
+                  <label key={value} className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="scope"
+                      checked={scope === value}
+                      onChange={() => handleScopeChange(value)}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      <span className="text-sm font-medium">{label}</span>
+                      <span className="text-xs text-gray-400 ml-2">{description}</span>
+                    </span>
+                  </label>
                 ))}
-              </select>
-            )}
-          </div>
+              </div>
+              <p className="text-xs text-gray-400 mt-1.5">
+                Sends <code className="text-[10px] bg-gray-100 px-1 rounded">{resourceType}</code>{' '}
+                {scope === 'specific' ? 'with a resource id.' : 'with no resource id.'}
+              </p>
+            </div>
+          )}
+
+          {needsResourceId && (
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">
+                {ENTITY_TYPES.find((t) => t.value === entityType)?.label} *
+              </label>
+              {resourceOptions.length === 0 ? (
+                <p className="text-sm text-gray-400 italic">No {entityType}s found.</p>
+              ) : (
+                <select
+                  value={form.resourceId}
+                  onChange={(e) => setForm((f) => ({ ...f, resourceId: e.target.value }))}
+                  className="w-full text-sm border border-gray-300 rounded px-2 py-1.5"
+                  required
+                >
+                  <option value="">— select —</option>
+                  {resourceOptions.map((r) => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
           <div>
             <label className="block text-xs text-gray-500 mb-1">Role</label>
             <select
