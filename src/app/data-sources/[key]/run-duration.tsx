@@ -12,8 +12,17 @@ interface Props {
   durationMs: number | null;
   /** 'running' | 'success' | 'failed' (anything else renders static). */
   status: string;
-  /** Extra className for the wrapping span. */
+  /** Extra className for the wrapping element. */
   className?: string;
+  /**
+   * Rendering variant.
+   *   'inline' (default) — a single span, sits in table cells / page subtitles.
+   *   'big'              — a full-width card with large typography and a
+   *                        pulsing indicator while running. Use as a banner
+   *                        above the content on pages where the user
+   *                        watches the sync progress.
+   */
+  size?: 'inline' | 'big';
 }
 
 /**
@@ -28,7 +37,13 @@ interface Props {
  * Intended to be used anywhere a run's duration is displayed. Generic —
  * no source-specific logic, so it slots into every data source.
  */
-export function RunDuration({ startedAt, durationMs, status, className }: Props) {
+export function RunDuration({
+  startedAt,
+  durationMs,
+  status,
+  className,
+  size = 'inline',
+}: Props) {
   const isLive = status === 'running' && durationMs === null;
 
   // SSR-safe: on the server we have no wallclock, so initialize to null.
@@ -46,17 +61,65 @@ export function RunDuration({ startedAt, durationMs, status, className }: Props)
     return () => clearInterval(id);
   }, [isLive, startedAt]);
 
-  // Pre-hydration render for a running row: show a dash. Post-hydration the
-  // useEffect above fills in the live value.
   const displayMs = isLive ? liveMs : durationMs;
+  const formatted = displayMs === null ? '—' : formatDuration(displayMs);
 
+  if (size === 'big') {
+    const label = isLive
+      ? 'Running'
+      : status === 'success'
+        ? 'Completed in'
+        : status === 'failed'
+          ? 'Failed after'
+          : 'Duration';
+    const accent = isLive
+      ? 'border-amber-200 bg-amber-50'
+      : status === 'success'
+        ? 'border-green-200 bg-green-50'
+        : status === 'failed'
+          ? 'border-red-200 bg-red-50'
+          : 'border-gray-200 bg-white';
+    const textColor = isLive
+      ? 'text-amber-900'
+      : status === 'success'
+        ? 'text-green-900'
+        : status === 'failed'
+          ? 'text-red-900'
+          : 'text-gray-900';
+
+    return (
+      <div
+        className={`mb-6 border rounded-lg px-6 py-4 flex items-center gap-5 ${accent} ${className ?? ''}`}
+      >
+        {isLive && (
+          <span className="relative flex w-3 h-3" aria-hidden>
+            <span className="absolute inset-0 rounded-full bg-amber-400 opacity-75 animate-ping" />
+            <span className="relative inline-flex w-3 h-3 rounded-full bg-amber-500" />
+          </span>
+        )}
+        <div className="flex-1">
+          <div className="text-xs uppercase tracking-wider text-gray-600 font-medium">
+            {label}
+          </div>
+          <div
+            className={`text-4xl font-semibold tabular-nums mt-1 ${textColor}`}
+            suppressHydrationWarning
+          >
+            {formatted}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Inline (default) — compact span, used in table cells / subtitles.
   return (
     <span
       className={`tabular-nums ${className ?? ''}`}
       title={isLive ? 'running — live' : undefined}
       suppressHydrationWarning
     >
-      {displayMs === null ? '—' : formatDuration(displayMs)}
+      {formatted}
       {isLive && <span aria-hidden className="ml-1 text-amber-500">•</span>}
     </span>
   );

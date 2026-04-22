@@ -135,6 +135,16 @@ export default async function SyncRunDetailPage({ params }: { params: { key: str
         </span>
       </div>
 
+      {/* Prominent duration — ticks live while running, stays as a record
+          of the completion time once done. Placed above the counters so
+          the user can't miss it on a long-running sync. */}
+      <RunDuration
+        startedAt={run.startedAt.toISOString()}
+        durationMs={run.durationMs}
+        status={run.status}
+        size="big"
+      />
+
       {/* Counters */}
       <div className="grid grid-cols-6 gap-3 mb-8">
         {[
