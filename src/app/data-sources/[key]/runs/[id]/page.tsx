@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { RunDuration } from '../../run-duration';
 
 export const dynamic = 'force-dynamic';
 
@@ -78,16 +79,20 @@ export default async function SyncRunDetailPage({ params }: { params: { key: str
       <div className="flex items-start justify-between mb-6">
         <div>
           <h1 className="text-xl font-semibold">{sourceLabel} Sync</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {run.startedAt.toLocaleString('en-US', {
-              dateStyle: 'medium',
-              timeStyle: 'short',
-            })}
-            {run.durationMs !== null && (
-              <span className="ml-2 text-gray-400">
-                ({run.durationMs < 1000 ? `${run.durationMs}ms` : `${(run.durationMs / 1000).toFixed(1)}s`})
-              </span>
-            )}
+          <p className="text-sm text-gray-500 mt-1 flex items-center gap-2">
+            <span>
+              {run.startedAt.toLocaleString('en-US', {
+                dateStyle: 'medium',
+                timeStyle: 'short',
+              })}
+            </span>
+            <span className="text-gray-400">·</span>
+            <RunDuration
+              startedAt={run.startedAt.toISOString()}
+              durationMs={run.durationMs}
+              status={run.status}
+              className="text-gray-400"
+            />
           </p>
         </div>
         <span

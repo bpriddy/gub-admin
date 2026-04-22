@@ -3,14 +3,9 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { IntervalForm } from './interval-form';
 import { SyncButton } from './sync-button';
+import { RunDuration } from './run-duration';
 
 export const dynamic = 'force-dynamic';
-
-function formatDuration(ms: number | null): string {
-  if (ms === null) return '—';
-  if (ms < 1000) return `${ms}ms`;
-  return `${(Math.round(ms / 100) / 10).toFixed(1)}s`;
-}
 
 function formatTime(date: Date): string {
   return date.toLocaleString('en-US', {
@@ -152,8 +147,12 @@ export default async function DataSourceDetailPage({ params }: { params: { key: 
                       <span className="text-gray-400">0</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right text-gray-500 tabular-nums">
-                    {formatDuration(run.durationMs)}
+                  <td className="px-4 py-3 text-right text-gray-500">
+                    <RunDuration
+                      startedAt={run.startedAt.toISOString()}
+                      durationMs={run.durationMs}
+                      status={run.status}
+                    />
                   </td>
                 </tr>
               ))}
