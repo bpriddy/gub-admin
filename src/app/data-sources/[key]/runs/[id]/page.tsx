@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { RunDuration } from '../../run-duration';
+import { AutoRefresh } from '../../auto-refresh';
 
 export const dynamic = 'force-dynamic';
 
@@ -96,6 +97,13 @@ export default async function SyncRunDetailPage({ params }: { params: { key: str
 
   return (
     <div>
+      {/* Poll every 10s ONLY while the sync is still running — once it
+          lands on success / failed, there are no further state changes
+          to catch, so the poll auto-stops. Counters, classifier stats,
+          and the final summary all appear on the first refresh after
+          completion. */}
+      <AutoRefresh enabled={run.status === 'running'} />
+
       <div className="mb-6">
         <Link href={`/data-sources/${params.key}`} className="text-sm text-gray-500 hover:text-gray-700">
           &larr; Back to {sourceLabel}
