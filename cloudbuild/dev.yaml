@@ -63,7 +63,14 @@ steps:
       - --cpu=1
       - --port=3000
       - --service-account=sa-$_SERVICE@$PROJECT_ID.iam.gserviceaccount.com
-      - --set-env-vars=NODE_ENV=development,GCP_PROJECT_ID=$PROJECT_ID,GUB_BACKEND_URL=$_GUB_BACKEND_URL
+      # NODE_ENV=production — this is a production-built Next.js container
+      # (next build produces a production artifact). The "dev" in the service
+      # name refers to the GCP project environment, not to NODE_ENV mode.
+      # Setting NODE_ENV=development at runtime opts into dev-mode stack
+      # traces + verbose errors, AND would weaken the IAP_DEV_EMAIL bypass
+      # guard in src/lib/iap-dev-bypass.ts — it MUST stay 'production' on
+      # every deployed Cloud Run revision.
+      - --set-env-vars=NODE_ENV=production,GCP_PROJECT_ID=$PROJECT_ID,GUB_BACKEND_URL=$_GUB_BACKEND_URL
       - --set-secrets=DATABASE_URL=$_DB_SECRET:latest
       - --add-cloudsql-instances=$PROJECT_ID:$_REGION:$_CLOUDSQL_INSTANCE
     waitFor: [push]
