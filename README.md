@@ -49,15 +49,26 @@ The Data Sources section provides visibility into automated data sync:
 git clone https://github.com/bpriddy/gub-admin.git
 cd gub-admin
 npm install
+
+# Wire the secret-scan pre-commit hook (required — refuses commit on
+# detected API keys, tokens, JSON keys, etc.)
+brew install gitleaks        # or see https://github.com/gitleaks/gitleaks#installation
+git config core.hooksPath .githooks
 ```
 
 ### Environment
 
-Create a `.env` file:
+Copy the example and fill in your values:
 
-```env
-DATABASE_URL=postgresql://user:password@localhost:5432/gcp_auth
+```bash
+cp .env.example .env.local
 ```
+
+At minimum you'll need `DATABASE_URL`, `GUB_BACKEND_URL`, and (for local
+development only) `IAP_DEV_EMAIL` to shortcut past IAP. See `.env.example`
+for the full list. `IAP_DEV_EMAIL` only works with `NODE_ENV=development`
+on a localhost request — the startup guard in `src/lib/iap-dev-bypass.ts`
+refuses to boot if you try to carry it into a deployed service.
 
 ### Run locally
 

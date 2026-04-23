@@ -18,14 +18,25 @@
 
 # misc
 .DS_Store
+
+# secrets — code-level coverage for anything that should NOT hit git
+.env
+.env.*
+!.env.example
+secrets/
+keys/
 *.pem
+*.key
+*.p12
+*-sa.json
+*service-account*.json
 
 # debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# local env files
+# local env files — (kept for clarity; covered by the secrets block above)
 .env*.local
 
 # vercel
