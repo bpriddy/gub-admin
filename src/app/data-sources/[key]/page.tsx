@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { IntervalForm } from './interval-form';
 import { SyncButton } from './sync-button';
 import { RunDuration } from './run-duration';
+import { AutoRefresh } from './auto-refresh';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +30,11 @@ export default async function DataSourceDetailPage({ params }: { params: { key: 
 
   return (
     <div>
+      {/* Poll every 10s so the run history catches syncs that start / finish
+          while the user is on the page. Silently pauses when the tab is
+          backgrounded — see auto-refresh.tsx. */}
+      <AutoRefresh />
+
       <div className="mb-6">
         <Link href="/data-sources" className="text-sm text-gray-500 hover:text-gray-700">
           &larr; Data Sources
