@@ -1,18 +1,17 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { requireActor } from '@/lib/actor';
 
 const ReviewSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('approve'),
-    reviewedByStaffId: z.string().uuid(),
     reviewNote: z.string().max(2000).nullable().optional(),
     // Optional grant overrides — defaults to the values on the request
     expiresAt: z.string().datetime().nullable().optional(),
   }),
   z.object({
     action: z.literal('deny'),
-    reviewedByStaffId: z.string().uuid(),
     reviewNote: z.string().max(2000).nullable().optional(),
   }),
 ]);
@@ -23,6 +22,12 @@ export async function PATCH(
   request: Request,
   { params }: { params: { id: string } },
 ) {
+  // Resolve the reviewer from the IAP identity — never from the request body.
+  // Any "who reviewed this" attribution flows from this actorId.
+  const actor = await requireActor();
+  if ('response' in actor) return actor.response;
+  const { actorId } = actor;
+
   let body: unknown;
   try {
     body = await request.json();
@@ -49,7 +54,7 @@ export async function PATCH(
     );
   }
 
-  const { action, reviewedByStaffId, reviewNote } = parsed.data;
+  const { action, reviewNote } = parsed.data;
   const now = new Date();
 
   if (action === 'deny') {
@@ -58,7 +63,7 @@ export async function PATCH(
         where: { id: params.id },
         data: {
           status: 'denied',
-          reviewedByStaffId,
+          reviewedByStaffId: actorId,
           reviewedAt: now,
           reviewNote: reviewNote ?? null,
         },
@@ -69,7 +74,7 @@ export async function PATCH(
           action: 'access_request_denied',
           entityType: 'access_request',
           entityId: params.id,
-          actorId: reviewedByStaffId,
+          actorId,
           before: {
             userId: accessRequest.userId,
             resourceType: accessRequest.resourceType,
@@ -114,7 +119,7 @@ export async function PATCH(
         where: { id: existingGrant.id },
         data: {
           role: accessRequest.requestedRole,
-          grantedBy: reviewedByStaffId,
+          grantedBy: actorId,
           grantedAt: now,
           expiresAt: expiresAt ? new Date(expiresAt) : null,
           revokedAt: null,
@@ -130,7 +135,7 @@ export async function PATCH(
           resourceType: accessRequest.resourceType,
           resourceId,
           role: accessRequest.requestedRole,
-          grantedBy: reviewedByStaffId,
+          grantedBy: actorId,
           expiresAt: expiresAt ? new Date(expiresAt) : null,
         },
       });
@@ -144,7 +149,7 @@ export async function PATCH(
         action: grantAction,
         entityType: 'access_grant',
         entityId: grantId,
-        actorId: reviewedByStaffId,
+        actorId,
         ...(existingGrant ? { before: { role: existingGrant.role, expiresAt: existingGrant.expiresAt } } : {}),
         after: {
           userId: accessRequest.userId,
@@ -164,7 +169,7 @@ export async function PATCH(
         action: 'access_request_approved',
         entityType: 'access_request',
         entityId: params.id,
-        actorId: reviewedByStaffId,
+        actorId,
         before: {
           userId: accessRequest.userId,
           resourceType: accessRequest.resourceType,
@@ -184,7 +189,7 @@ export async function PATCH(
       where: { id: params.id },
       data: {
         status: 'approved',
-        reviewedByStaffId,
+        reviewedByStaffId: actorId,
         reviewedAt: now,
         reviewNote: reviewNote ?? null,
         grantId,

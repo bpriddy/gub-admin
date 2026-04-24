@@ -4,7 +4,7 @@ import BatchGrantForm from './BatchGrantForm';
 export const dynamic = 'force-dynamic';
 
 export default async function BatchGrantPage() {
-  const [users, accounts, staff] = await Promise.all([
+  const [users, accounts] = await Promise.all([
     prisma.user.findMany({
       where: { isActive: true },
       orderBy: { email: 'asc' },
@@ -14,11 +14,6 @@ export default async function BatchGrantPage() {
       orderBy: { name: 'asc' },
       select: { id: true, name: true },
     }),
-    prisma.staff.findMany({
-      where: { status: 'active' },
-      orderBy: { fullName: 'asc' },
-      select: { id: true, fullName: true },
-    }),
   ]);
 
   return (
@@ -27,7 +22,7 @@ export default async function BatchGrantPage() {
       <p className="text-sm text-gray-500 mb-6">
         Grant a user access to an account and its campaigns in one action.
       </p>
-      <BatchGrantForm users={users} accounts={accounts} staff={staff} />
+      <BatchGrantForm users={users} accounts={accounts} />
     </div>
   );
 }

@@ -1,29 +1,20 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { z } from 'zod';
+import { requireActor } from '@/lib/actor';
 
-const AnonymiseSchema = z.object({
-  /** staff.id of the administrator processing the DSAR — recorded in audit_log */
-  requestedBy: z.string().uuid(),
-});
+// Note: this endpoint used to accept `requestedBy` (staff.id of the
+// administrator processing the DSAR) in the request body. That was a forgeable
+// audit attribution. The server now resolves the acting Staff from the IAP
+// identity (see src/lib/actor.ts). No schema needed — body is intentionally
+// unused.
 
 export async function POST(
-  request: Request,
+  _request: Request,
   { params }: { params: { id: string } },
 ) {
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'Request body must be valid JSON' }, { status: 400 });
-  }
-
-  const parsed = AnonymiseSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  }
-
-  const { requestedBy } = parsed.data;
+  const actor = await requireActor();
+  if ('response' in actor) return actor.response;
+  const { actorId } = actor;
 
   const staff = await prisma.staff.findUnique({
     where: { id: params.id },
@@ -99,7 +90,7 @@ export async function POST(
       // Revoke all active access grants — former employees should have no access
       await tx.accessGrant.updateMany({
         where: { userId: staff.userId, revokedAt: null },
-        data:  { revokedAt: now, revokedBy: requestedBy },
+        data:  { revokedAt: now, revokedBy: actorId },
       });
     }
 
@@ -111,7 +102,7 @@ export async function POST(
         action:     'staff_anonymised',
         entityType: 'staff',
         entityId:   params.id,
-        actorId:    requestedBy,
+        actorId,
         before: {
           fullName:   staff.fullName,
           email:      staff.email,
