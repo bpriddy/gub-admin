@@ -17,8 +17,6 @@ interface AccessRequestRow {
   reviewedByStaff: { id: string; fullName: string } | null;
 }
 
-interface StaffOption { id: string; fullName: string; email: string }
-
 const STATUS_FILTERS = ['pending', 'approved', 'denied', 'all'] as const;
 type StatusFilter = typeof STATUS_FILTERS[number];
 
@@ -38,8 +36,6 @@ function resourceLabel(resourceType: string, resourceId: string | null): string 
 export default function AccessRequestsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending');
   const [requests, setRequests] = useState<AccessRequestRow[]>([]);
-  const [staffList, setStaffList] = useState<StaffOption[]>([]);
-  const [reviewerId, setReviewerId] = useState('');
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState<Record<string, boolean>>({});
 
@@ -48,27 +44,16 @@ export default function AccessRequestsPage() {
     setRequests(await res.json());
   }
 
-  async function loadStaff() {
-    const res = await fetch('/api/staff');
-    const all: StaffOption[] = await res.json();
-    setStaffList(all);
-  }
-
   useEffect(() => { void load(); }, [statusFilter]);
-  useEffect(() => { void loadStaff(); }, []);
 
   async function handleAction(id: string, action: 'approve' | 'deny') {
-    if (!reviewerId) {
-      alert('Select a reviewer before approving or denying.');
-      return;
-    }
     setSubmitting((s) => ({ ...s, [id]: true }));
+    // Reviewer is resolved server-side from the IAP identity — never sent by the client.
     await fetch(`/api/access-requests/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action,
-        reviewedByStaffId: reviewerId,
         reviewNote: reviewNotes[id] || null,
       }),
     });
@@ -88,21 +73,7 @@ export default function AccessRequestsPage() {
         </p>
       </div>
 
-      {/* Reviewer picker — sits above the table, used for all approve/deny actions */}
-      <div className="bg-white border border-gray-200 rounded-lg p-4 mb-5 flex items-center gap-3">
-        <label className="text-sm text-gray-600 whitespace-nowrap">Reviewing as:</label>
-        <select
-          value={reviewerId}
-          onChange={(e) => setReviewerId(e.target.value)}
-          className="text-sm border border-gray-300 rounded px-2 py-1.5 flex-1 max-w-xs"
-        >
-          <option value="">— select your name —</option>
-          {staffList.map((s) => (
-            <option key={s.id} value={s.id}>{s.fullName}</option>
-          ))}
-        </select>
-        {!reviewerId && <span className="text-xs text-amber-600">Required to approve or deny</span>}
-      </div>
+      {/* Reviewer identity is resolved server-side from the IAP header — no picker. */}
 
       {/* Status filter tabs */}
       <div className="flex gap-1 mb-4 border-b border-gray-200">
@@ -201,14 +172,14 @@ export default function AccessRequestsPage() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => void handleAction(r.id, 'approve')}
-                        disabled={submitting[r.id] || !reviewerId}
+                        disabled={submitting[r.id]}
                         className="flex-1 text-xs px-2 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-40"
                       >
                         {submitting[r.id] ? '…' : 'Approve'}
                       </button>
                       <button
                         onClick={() => void handleAction(r.id, 'deny')}
-                        disabled={submitting[r.id] || !reviewerId}
+                        disabled={submitting[r.id]}
                         className="flex-1 text-xs px-2 py-1.5 border border-red-300 text-red-600 rounded hover:bg-red-50 disabled:opacity-40"
                       >
                         {submitting[r.id] ? '…' : 'Deny'}

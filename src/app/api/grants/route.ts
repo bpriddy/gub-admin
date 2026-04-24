@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { requireActor } from '@/lib/actor';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -20,23 +21,29 @@ export async function GET(request: Request) {
   return NextResponse.json(grants);
 }
 
+// Note: `grantedBy` is NOT in this schema on purpose. The server resolves
+// the acting Staff from the IAP identity (see src/lib/actor.ts). Accepting
+// it from the body would let any IAP-authenticated user forge attribution.
 const CreateGrantSchema = z.object({
   userId: z.string().uuid(),
   resourceType: z.string().min(1),
   resourceId: z.string().uuid().optional(), // omit for functional grants — nil UUID used
   role: z.string().min(1).default('viewer'),
-  grantedBy: z.string().uuid(),
   expiresAt: z.string().nullable().optional(),
 });
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
 export async function POST(request: Request) {
+  const actor = await requireActor();
+  if ('response' in actor) return actor.response;
+  const { actorId } = actor;
+
   const body = await request.json();
   const parsed = CreateGrantSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const { userId, resourceType, role, grantedBy, expiresAt } = parsed.data;
+  const { userId, resourceType, role, expiresAt } = parsed.data;
   const resourceId = parsed.data.resourceId ?? NIL_UUID;
   const expiresAtDate = expiresAt ? new Date(expiresAt) : null;
 
@@ -51,7 +58,7 @@ export async function POST(request: Request) {
           data: { role, expiresAt: expiresAtDate },
         })
       : await tx.accessGrant.create({
-          data: { userId, resourceType, resourceId, role, grantedBy, expiresAt: expiresAtDate },
+          data: { userId, resourceType, resourceId, role, grantedBy: actorId, expiresAt: expiresAtDate },
         });
 
     await tx.auditLog.create({
@@ -59,7 +66,7 @@ export async function POST(request: Request) {
         action: existing ? 'grant_updated' : 'grant_created',
         entityType: 'access_grant',
         entityId: result.id,
-        actorId: grantedBy,
+        actorId,
         ...(existing ? { before: { role: existing.role, expiresAt: existing.expiresAt } } : {}),
         after: { userId, resourceType, resourceId, role, expiresAt: expiresAtDate },
       },
@@ -71,17 +78,21 @@ export async function POST(request: Request) {
   return NextResponse.json({ granted: 1, grant }, { status: 201 });
 }
 
+// Same rule for revoke: `revokedBy` is server-resolved, never body-supplied.
 const RevokeSchema = z.object({
   grantId: z.string().uuid(),
-  revokedBy: z.string().uuid(),
 });
 
 export async function DELETE(request: Request) {
+  const actor = await requireActor();
+  if ('response' in actor) return actor.response;
+  const { actorId } = actor;
+
   const body = await request.json();
   const parsed = RevokeSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const { grantId, revokedBy } = parsed.data;
+  const { grantId } = parsed.data;
 
   const existing = await prisma.accessGrant.findFirst({
     where: { id: grantId, revokedAt: null },
@@ -94,7 +105,7 @@ export async function DELETE(request: Request) {
   const grant = await prisma.$transaction(async (tx) => {
     const result = await tx.accessGrant.update({
       where: { id: grantId },
-      data: { revokedAt: now, revokedBy },
+      data: { revokedAt: now, revokedBy: actorId },
     });
 
     await tx.auditLog.create({
@@ -102,7 +113,7 @@ export async function DELETE(request: Request) {
         action: 'grant_revoked',
         entityType: 'access_grant',
         entityId: grantId,
-        actorId: revokedBy,
+        actorId,
         before: {
           userId: existing.userId,
           resourceType: existing.resourceType,
@@ -111,7 +122,7 @@ export async function DELETE(request: Request) {
           expiresAt: existing.expiresAt,
           grantedAt: existing.grantedAt,
         },
-        after: { revokedAt: now, revokedBy },
+        after: { revokedAt: now, revokedBy: actorId },
       },
     });
 

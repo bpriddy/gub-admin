@@ -1,14 +1,17 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { requireActor } from '@/lib/actor';
 
+// Note: `grantedBy` is NOT in this schema on purpose. The server resolves
+// the acting Staff from the IAP identity (see src/lib/actor.ts). Accepting
+// it from the body would let any IAP-authenticated user forge attribution.
 const BatchGrantSchema = z.object({
   userId: z.string().uuid(),
   accountId: z.string().uuid(),
   /** Array of campaign IDs, or "all" to grant access to all campaigns in the account */
   campaignIds: z.union([z.array(z.string().uuid()), z.literal('all')]),
   role: z.enum(['viewer', 'contributor', 'manager', 'admin']).default('viewer'),
-  grantedBy: z.string().uuid(),
   expiresAt: z.string().nullable().optional(),
 });
 
@@ -51,11 +54,15 @@ async function upsertGrant(
 }
 
 export async function POST(request: Request) {
+  const actor = await requireActor();
+  if ('response' in actor) return actor.response;
+  const { actorId } = actor;
+
   const body = await request.json();
   const parsed = BatchGrantSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const { userId, accountId, campaignIds, role, grantedBy, expiresAt } = parsed.data;
+  const { userId, accountId, campaignIds, role, expiresAt } = parsed.data;
   const expiresAtDate = expiresAt ? new Date(expiresAt) : null;
 
   // Resolve campaign IDs if "all"
@@ -85,7 +92,7 @@ export async function POST(request: Request) {
         resourceType,
         resourceId,
         role,
-        grantedBy,
+        grantedBy: actorId,
         expiresAt: expiresAtDate,
       });
 
@@ -94,7 +101,7 @@ export async function POST(request: Request) {
           action: result.isNew ? 'grant_created' : 'grant_updated',
           entityType: 'access_grant',
           entityId: result.id,
-          actorId: grantedBy,
+          actorId,
           ...(result.isNew ? {} : { before: { role: result.previousRole, expiresAt: result.previousExpiresAt } }),
           after: { userId, resourceType, resourceId, role, expiresAt: expiresAtDate },
         },

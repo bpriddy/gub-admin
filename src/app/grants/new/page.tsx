@@ -4,16 +4,11 @@ import NewGrantForm from './NewGrantForm';
 export const dynamic = 'force-dynamic';
 
 export default async function NewGrantPage() {
-  const [users, staff, accounts, campaigns, offices, teams] = await Promise.all([
+  const [users, accounts, campaigns, offices, teams] = await Promise.all([
     prisma.user.findMany({
       where: { isActive: true },
       orderBy: { email: 'asc' },
       select: { id: true, email: true, displayName: true },
-    }),
-    prisma.staff.findMany({
-      where: { status: { in: ['active', 'on_leave'] } },
-      orderBy: { fullName: 'asc' },
-      select: { id: true, fullName: true },
     }),
     prisma.account.findMany({
       orderBy: { name: 'asc' },
@@ -49,7 +44,6 @@ export default async function NewGrantPage() {
       </p>
       <NewGrantForm
         users={users}
-        staff={staff}
         accounts={accounts}
         campaigns={campaigns}
         offices={offices}

@@ -56,7 +56,6 @@ type Resource = { id: string; name: string };
 
 type Props = {
   users: { id: string; email: string; displayName: string | null }[];
-  staff: { id: string; fullName: string }[];
   accounts: Resource[];
   campaigns: Resource[];
   offices: Resource[];
@@ -91,7 +90,7 @@ function resolveResourceType(entityType: EntityTypeName, scope: EntityScope): st
   return entityType;
 }
 
-export default function NewGrantForm({ users, staff, accounts, campaigns, offices, teams }: Props) {
+export default function NewGrantForm({ users, accounts, campaigns, offices, teams }: Props) {
   const router = useRouter();
   const [category, setCategory] = useState<GrantCategory>('entity');
   const [entityType, setEntityType] = useState<EntityTypeName>('account');
@@ -101,7 +100,6 @@ export default function NewGrantForm({ users, staff, accounts, campaigns, office
     userId: '',
     resourceId: '',
     role: 'viewer',
-    grantedBy: '',
     expiresAt: '',
   });
   const [saving, setSaving] = useState(false);
@@ -166,7 +164,6 @@ export default function NewGrantForm({ users, staff, accounts, campaigns, office
         // API's nil-UUID default.
         resourceId: needsResourceId ? form.resourceId : undefined,
         role: form.role,
-        grantedBy: form.grantedBy,
         expiresAt: form.expiresAt || null,
       }),
     });
@@ -346,21 +343,7 @@ export default function NewGrantForm({ users, staff, accounts, campaigns, office
         </select>
       </div>
 
-      {/* Granted by */}
-      <div>
-        <label className="block text-xs text-gray-500 mb-1">Granted By (staff) *</label>
-        <select
-          value={form.grantedBy}
-          onChange={(e) => setForm((f) => ({ ...f, grantedBy: e.target.value }))}
-          className="w-full text-sm border border-gray-300 rounded px-2 py-1.5"
-          required
-        >
-          <option value="">— select staff member —</option>
-          {staff.map((s) => (
-            <option key={s.id} value={s.id}>{s.fullName}</option>
-          ))}
-        </select>
-      </div>
+      {/* Granted by — resolved server-side from the IAP identity; no form field. */}
 
       {/* Expires at */}
       <div>

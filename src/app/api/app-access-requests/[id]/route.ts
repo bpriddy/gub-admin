@@ -1,18 +1,21 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { requireActor } from '@/lib/actor';
 
+// Note: `reviewedByStaffId` is NOT in this schema on purpose. The server
+// resolves the acting Staff from the IAP identity (see src/lib/actor.ts).
+// Accepting it from the body would let any IAP-authenticated user forge
+// attribution on review actions.
 const ReviewSchema = z.discriminatedUnion('action', [
   z.object({
-    action:           z.literal('approve'),
-    reviewedByStaffId: z.string().uuid(),
-    reviewNote:       z.string().max(2000).nullable().optional(),
-    role:             z.string().default('viewer'),
+    action:     z.literal('approve'),
+    reviewNote: z.string().max(2000).nullable().optional(),
+    role:       z.string().default('viewer'),
   }),
   z.object({
-    action:           z.literal('deny'),
-    reviewedByStaffId: z.string().uuid(),
-    reviewNote:       z.string().max(2000).nullable().optional(),
+    action:     z.literal('deny'),
+    reviewNote: z.string().max(2000).nullable().optional(),
   }),
 ]);
 
@@ -20,6 +23,10 @@ export async function PATCH(
   request: Request,
   { params }: { params: { id: string } },
 ) {
+  const actor = await requireActor();
+  if ('response' in actor) return actor.response;
+  const { actorId } = actor;
+
   let body: unknown;
   try { body = await request.json(); } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
@@ -37,13 +44,13 @@ export async function PATCH(
     return NextResponse.json({ error: `Request is already ${accessRequest.status}` }, { status: 409 });
   }
 
-  const { action, reviewedByStaffId, reviewNote } = parsed.data;
+  const { action, reviewNote } = parsed.data;
   const now = new Date();
 
   if (action === 'deny') {
     const updated = await prisma.appAccessRequest.update({
       where: { id: params.id },
-      data: { status: 'denied', reviewedByStaffId, reviewedAt: now, reviewNote: reviewNote ?? null },
+      data: { status: 'denied', reviewedByStaffId: actorId, reviewedAt: now, reviewNote: reviewNote ?? null },
     });
     return NextResponse.json(updated);
   }
@@ -53,7 +60,7 @@ export async function PATCH(
 
   // Resolve reviewer's userId for the grantedById FK (UserAppPermission.grantedById → User)
   const reviewer = await prisma.staff.findUnique({
-    where: { id: reviewedByStaffId },
+    where: { id: actorId },
     select: { userId: true },
   });
 
@@ -72,7 +79,7 @@ export async function PATCH(
 
     return tx.appAccessRequest.update({
       where: { id: params.id },
-      data:  { status: 'approved', reviewedByStaffId, reviewedAt: now, reviewNote: reviewNote ?? null },
+      data:  { status: 'approved', reviewedByStaffId: actorId, reviewedAt: now, reviewNote: reviewNote ?? null },
     });
   });
 
