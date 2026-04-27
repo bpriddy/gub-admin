@@ -116,6 +116,79 @@ What this means in practice:
 - The audit log (`audit_log` table) still records the IAP-resolved Staff
   member behind every write — see `src/lib/actor.ts`.
 
+## Secrets & rotation
+
+Documents secrets/credentials this service uses and how to rotate them.
+For company-wide incident response (escalation, post-mortem, comms), see
+IT's canonical incident-response doc. This section covers system-specific
+actions only.
+
+This service is **deliberately thin** on secrets: authentication is at
+the Cloud IAP layer (see [Authorization](#authorization)) and the DB
+connection uses Cloud SQL Auth Proxy. The only true secret is the DB
+connection string.
+
+### Inventory
+
+| Credential | Where it lives | Issued by | Used for |
+|---|---|---|---|
+| `DATABASE_URL` | Secret Manager: `gub-admin-db-url-<env>` (e.g. `gub-admin-db-url-dev`) | Self-managed (Cloud SQL) | Direct DB access from server components and API routes (`BYPASSRLS` access) |
+| `IAP_DEV_EMAIL` | `.env.local` only — **never** set on a deployed Cloud Run service | N/A — local dev shortcut | Bypasses Cloud IAP locally, authenticating the request as this email. Three-layer guard in `src/lib/iap-dev-bypass.ts` refuses to boot if set with `NODE_ENV=production` or a non-localhost Host header. |
+| Cloud SQL connection | Auto-managed via `--add-cloudsql-instances` | GCP | Connects to the shared Cloud SQL instance — no static credentials |
+| IAP IAM binding | Managed in **gcp-universal-backend** (`terraform/gub_admin_iap.tf`) | GCP IAP | Authoritative list of users authorized to reach this app |
+
+### Rotation procedures
+
+#### `DATABASE_URL`
+
+**Preconditions.** None — Cloud Run rolling deploy handles the cutover.
+If you're rotating the DB password (not just the connection string),
+coordinate so old + new revisions don't both have invalid credentials
+during the rollout.
+
+**Steps.**
+1. Rotate the password in Cloud SQL → Users (the role is named
+   `gub_admin` or similar — see Cloud SQL console).
+2. Build the new connection string and add a new secret version:
+   ```bash
+   echo -n 'postgresql://gub_admin:<NEW_PW>@<host>:5432/gub?sslmode=require' \
+     | gcloud secrets versions add gub-admin-db-url-<env> --data-file=-
+   ```
+3. Trigger a redeploy by pushing an empty commit, or re-running the
+   latest Cloud Build trigger. Cloud Run resolves `:latest` at deploy
+   time, so a new revision picks up the new version.
+
+**Verification.** Open the deployed admin UI, sign in via IAP, navigate
+to `/users` (forces a Prisma query). Confirm rows render without errors.
+
+**Cleanup.** Disable the previous secret version after the new revision
+has served traffic for 5+ minutes:
+```bash
+gcloud secrets versions disable <PREV_VERSION> --secret=gub-admin-db-url-<env>
+```
+
+### Cut a user off
+
+If a user needs to lose access to gub-admin, follow the [**Cut a user
+off** procedure in
+gcp-universal-backend](https://github.com/bpriddy/gcp-universal-backend#cut-a-user-off-revoke-admin-access).
+Access here is controlled entirely by the IAP IAM binding declared in
+that repo's Terraform tree (`terraform/gub_admin_iap.tf`, var
+`admin_emails`). There's no in-app role to flip — see
+[Authorization](#authorization) for the design rationale.
+
+### What this service does NOT have
+
+- No JWT signing keys (it consumes JWTs verified against
+  gcp-universal-backend's JWKS endpoint, not signs them).
+- No Google OAuth client secret (consuming apps that need Workspace
+  OAuth — work-flows — own that flow; gub-admin only sees its end users
+  via Cloud IAP).
+- No third-party API keys.
+
+If a future feature adds a secret, add a row to the inventory above
+**and** a rotation procedure. Don't ship a secret with no rotation plan.
+
 ## Tech Stack
 
 - **Next.js 14** — App Router, server components, standalone output
