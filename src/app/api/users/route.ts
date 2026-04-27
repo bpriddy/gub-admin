@@ -18,12 +18,19 @@ export async function GET() {
   return NextResponse.json(users);
 }
 
+// Note: `role` and `isAdmin` are intentionally NOT writable here. The
+// authorization boundary for this app is Cloud IAP (see README's
+// "Authorization" section). The columns are still read for the list view
+// but cannot be set or modified from this surface.
+//
+// `.strict()` makes that fail-loud: a body containing `role` or `isAdmin`
+// (or any other unknown key) returns 400 rather than silently ignoring
+// the field. If a future caller revives in-app role checks, that 400 is
+// the early signal to revisit this design intentionally.
 const UpdateUserSchema = z.object({
-  role: z.string().optional(),
-  isAdmin: z.boolean().optional(),
   isActive: z.boolean().optional(),
   displayName: z.string().nullable().optional(),
-});
+}).strict();
 
 export async function PATCH(request: Request) {
   const { searchParams } = new URL(request.url);

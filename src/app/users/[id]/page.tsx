@@ -29,8 +29,6 @@ export default async function UserDetailPage({ params }: { params: { id: string 
         id: user.id,
         email: user.email,
         displayName: user.displayName,
-        role: user.role,
-        isAdmin: user.isAdmin,
         isActive: user.isActive,
       }} />
 
