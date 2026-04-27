@@ -85,6 +85,37 @@ npm run build
 npm start
 ```
 
+## Authorization
+
+This app is an **admin-only, break-glass tool** used rarely. The authorization
+boundary is **Cloud IAP**, not in-app role checks: only users explicitly
+listed in the IAP IAM binding can reach any page or API route. Once past
+IAP, every user has full admin capabilities — the app does not gate features
+on `User.isAdmin` or `User.role`.
+
+**Source of truth: Terraform.** The list of authorized emails lives in
+`gcp-universal-backend/terraform/environments/<env>.tfvars` as the
+`admin_emails` variable, applied via `google_iap_web_cloud_run_service_iam_binding`
+(see `terraform/gub_admin_iap.tf` in that repo). The binding is
+**authoritative** — anyone added via the GCP console without updating the
+tfvars file will be revoked on the next `terraform apply`. To grant or
+revoke access, edit `admin_emails` and apply.
+
+The `User.isAdmin` and `User.role` columns remain in the Prisma schema for
+possible future use, but are no longer editable from this app. The list
+view at `/users` still renders them as read-only badges. The PATCH
+endpoint at `/api/users` rejects bodies containing either field with a
+400 (Zod `.strict()`); any future caller that tries to write them will
+fail loud rather than silently no-op.
+
+What this means in practice:
+
+- To grant admin access: add the email to `admin_emails` in the tfvars
+  file in the gcp-universal-backend repo, get a PR review, apply.
+- To revoke: remove the email from the same file, apply.
+- The audit log (`audit_log` table) still records the IAP-resolved Staff
+  member behind every write — see `src/lib/actor.ts`.
+
 ## Tech Stack
 
 - **Next.js 14** — App Router, server components, standalone output
