@@ -33,6 +33,7 @@ const navLinks = [
   { href: '/resourcing', label: 'Resourcing' },
   { href: '/data-sources', label: 'Data Sources' },
   { href: '/oauth-clients', label: 'OAuth Clients' },
+  { href: '/settings', label: 'Settings' },
 ];
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
