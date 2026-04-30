@@ -9,6 +9,12 @@ const SETTINGS = [
     description:
       'Origins permitted to make cross-origin requests to GUB. Add an origin when a dev hits the 403; change is live on the next request, no redeploy.',
   },
+  {
+    href: '/settings/oauth-clients',
+    title: 'OAuth Agent Clients',
+    description:
+      'Server-side / agent clients registered with the GUB OAuth broker. Register, edit, deactivate, or delete entries; the client_secret is shown once at creation.',
+  },
 ] as const;
 
 export default function SettingsIndexPage() {
