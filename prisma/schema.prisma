@@ -541,6 +541,9 @@ model SyncRun {
   startedAt   DateTime  @default(now()) @map("started_at") @db.Timestamptz
   completedAt DateTime? @map("completed_at") @db.Timestamptz
   durationMs  Int?      @map("duration_ms")
+  // Heartbeat — bumped on every row update via DB trigger and Prisma
+  // @updatedAt. Owned by gcp-universal-backend's Drive sync reaper.
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
   totalScanned Int @default(0) @map("total_scanned")
   created      Int @default(0)
@@ -549,10 +552,31 @@ model SyncRun {
   skipped      Int @default(0)
   errored      Int @default(0)
 
+  // Drive sync chunking checkpoints (null for other sources). Set by
+  // gcp-universal-backend's drive.runner when a chunk's wall-clock
+  // budget trips; null when status is success/failed.
+  chunkPhase Int? @map("chunk_phase")
+  chunkIndex Int? @map("chunk_index")
+
   details Json?
   summary String? @db.Text
 
   @@index([source, startedAt(sort: Desc)])
   @@index([status])
   @@map("sync_runs")
+}
+
+// Singleton table tracking Drive incremental-poll state. Owned by
+// gcp-universal-backend (which performs the polling); this app only reads
+// from it for the Drive settings UI. Migrations live in
+// gcp-universal-backend; this declaration just gives gub-admin typed access.
+model DriveSyncState {
+  id                Int       @id @default(1)
+  pageToken         String?   @map("page_token") @db.Text
+  lastPolledAt      DateTime? @map("last_polled_at") @db.Timestamptz
+  lastOutcome       String?   @map("last_outcome")
+  lastFullSyncRunId String?   @map("last_full_sync_run_id") @db.Uuid
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("drive_sync_state")
 }
