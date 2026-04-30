@@ -134,7 +134,12 @@ export default async function CorsOriginsPage() {
                     {formatTime(r.createdAt)}
                   </td>
                   <td className="px-4 py-3">
-                    <OriginActions id={r.id} origin={r.origin} isActive={r.isActive} />
+                    <OriginActions
+                      id={r.id}
+                      origin={r.origin}
+                      label={r.label}
+                      isActive={r.isActive}
+                    />
                   </td>
                 </tr>
               );
