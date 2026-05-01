@@ -1,20 +1,25 @@
+/**
+ * /api/settings/trusted-apps — list + create trusted-app entries.
+ *
+ * Replaces the previous /api/settings/cors-origins route. Same audit
+ * pattern (requireActor + audit_log entries on every write), now operating
+ * on the consolidated trusted_apps table. The validation lib enforces
+ * Google client_id shape AND origin shape.
+ */
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { requireActor } from '@/lib/actor';
-import { validateCorsOrigin } from '@/lib/cors-origin-validation';
+import { validateTrustedApp } from '@/lib/trusted-app-validation';
+import { findCollidingActiveApp } from '@/lib/trusted-app-collision';
 
-/**
- * GET /api/settings/cors-origins
- * List all allow-list entries with the staff name of who added each.
- * Read-only; no actor needed. The IAP gate is the access control.
- */
 export async function GET() {
-  const rows = await prisma.corsAllowedOrigin.findMany({
+  const rows = await prisma.trustedApp.findMany({
     orderBy: [{ isActive: 'desc' }, { createdAt: 'desc' }],
   });
 
-  // Look up Staff names for addedBy in one batched query.
+  // Look up Staff names for addedBy in one batched query so the table
+  // can render "Added by" without an N+1.
   const addedByIds = Array.from(
     new Set(rows.map((r) => r.addedBy).filter((id): id is string => id !== null)),
   );
@@ -34,15 +39,11 @@ export async function GET() {
   );
 }
 
-/**
- * POST /api/settings/cors-origins
- * Add a new allowed origin. Validation rejects wildcards, malformed URLs,
- * paths/queries, and non-http(s) protocols. Audit log records the actor.
- */
 const CreateSchema = z
   .object({
-    origin: z.string().min(1),
-    label: z.string().max(200).nullable().optional(),
+    name: z.string(),
+    origins: z.array(z.string()).default([]),
+    googleClientIds: z.array(z.string()).default([]),
   })
   .strict();
 
@@ -63,49 +64,51 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const validation = validateCorsOrigin(parsed.data.origin);
+  const validation = validateTrustedApp(parsed.data);
   if (!validation.ok) {
     return NextResponse.json(
-      { error: 'INVALID_ORIGIN', reason: validation.reason },
+      { error: 'INVALID_TRUSTED_APP', reason: validation.reason },
       { status: 400 },
     );
   }
 
-  // Check for an existing row (active or inactive). Re-adding an existing
-  // inactive origin should be an "activate" UX, not a duplicate insert —
-  // but we surface it as a 409 here so the UI can guide the operator
-  // explicitly rather than silently un-soft-deleting.
-  const existing = await prisma.corsAllowedOrigin.findUnique({
-    where: { origin: validation.normalized },
+  // Cross-row uniqueness guard: same origin/client_id on multiple rows
+  // would break the strict-pairing semantics. Surface the collision.
+  const collision = await findCollidingActiveApp({
+    origins: validation.normalized.origins,
+    googleClientIds: validation.normalized.googleClientIds,
   });
-  if (existing) {
+  if (collision) {
     return NextResponse.json(
       {
-        error: 'ORIGIN_ALREADY_EXISTS',
-        existing: { id: existing.id, isActive: existing.isActive },
+        error: 'IDENTIFIER_ALREADY_REGISTERED',
+        existing: { id: collision.id, name: collision.name },
+        conflict: collision.conflict,
       },
       { status: 409 },
     );
   }
 
   const created = await prisma.$transaction(async (tx) => {
-    const row = await tx.corsAllowedOrigin.create({
+    const row = await tx.trustedApp.create({
       data: {
-        origin: validation.normalized,
-        label: parsed.data.label ?? null,
+        name: validation.normalized.name,
+        origins: validation.normalized.origins,
+        googleClientIds: validation.normalized.googleClientIds,
         isActive: true,
         addedBy: actorId,
       },
     });
     await tx.auditLog.create({
       data: {
-        action: 'cors_origin_created',
-        entityType: 'cors_allowed_origin',
+        action: 'trusted_app_created',
+        entityType: 'trusted_app',
         entityId: row.id,
         actorId,
         after: {
-          origin: row.origin,
-          label: row.label,
+          name: row.name,
+          origins: row.origins,
+          googleClientIds: row.googleClientIds,
           isActive: row.isActive,
         },
       },

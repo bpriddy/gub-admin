@@ -4,10 +4,10 @@ export const dynamic = 'force-dynamic';
 
 const SETTINGS = [
   {
-    href: '/settings/cors-origins',
-    title: 'CORS allow-list',
+    href: '/settings/trusted-apps',
+    title: 'Trusted apps',
     description:
-      'Origins permitted to make cross-origin requests to GUB. Add an origin when a dev hits the 403; change is live on the next request, no redeploy.',
+      'Per-consuming-app trust registry — origins (CORS) and Google OAuth client_ids (audiences) on a single row. Strict same-row pairing means forks don’t inherit the parent app’s trust. Replaces the older CORS allow-list page.',
   },
   {
     href: '/settings/oauth-clients',

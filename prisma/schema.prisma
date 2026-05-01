@@ -496,28 +496,36 @@ model OAuthAuthCode {
   @@map("oauth_auth_codes")
 }
 
-// Runtime-mutable CORS allow-list. Source of truth: managed via the
-// /settings/cors-origins admin UI here. The originAllowList middleware
-// in gcp-universal-backend reads this table on each cross-origin
-// request. Migration that creates the table + does the initial seed
-// lives in gcp-universal-backend (20260430010000_cors_allowed_origins).
-// This declaration just gives gub-admin typed access to read + write.
+// Runtime-mutable trusted apps registry. Source of truth: managed via
+// /settings/trusted-apps in this admin UI. Two consuming services in
+// gcp-universal-backend read this table:
+//   - originAllowList middleware: "is the request's Origin on any
+//     active row's `origins`?" (coarse CORS gate)
+//   - verifyGoogleToken: pulls active `googleClientIds` for crypto
+//     verification, then enforces strict same-row pairing — token's
+//     `aud` AND request's Origin must be on the SAME row, so a fork
+//     of a registered app doesn't inherit access.
 //
-// SCOPE: dev/staging tooling. Production CORS will land at the edge
-// (WAF / Cloud Armor / load balancer); see the gcp-universal-backend
-// README "CORS allow-list — dev/staging tooling" section for the
-// two-layer architecture and the prod plan.
-model CorsAllowedOrigin {
-  id        String   @id @default(uuid()) @db.Uuid
-  origin    String   @unique
-  label     String?
-  isActive  Boolean  @default(true) @map("is_active")
-  addedBy   String?  @map("added_by") @db.Uuid
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+// Migration that creates the table + folds the legacy CORS rows lives
+// in gcp-universal-backend (20260430040000_trusted_apps_registry).
+// This declaration just gives gub-admin typed access.
+//
+// SCOPE: dev/staging tooling. Production trust will land at the edge
+// (WAF / Cloud Armor / LB) plus upstream OAuth client registration;
+// see the gcp-universal-backend README "Trusted apps registry —
+// dev/staging tooling" section for the two-layer architecture.
+model TrustedApp {
+  id              String   @id @default(uuid()) @db.Uuid
+  name            String
+  origins         String[]
+  googleClientIds String[] @map("google_client_ids")
+  isActive        Boolean  @default(true) @map("is_active")
+  addedBy         String?  @map("added_by") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  @@index([origin, isActive])
-  @@map("cors_allowed_origins")
+  @@index([isActive])
+  @@map("trusted_apps")
 }
 
 model StaffMetadata {
