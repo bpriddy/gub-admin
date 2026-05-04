@@ -28,8 +28,6 @@ const navLinks = [
   { href: '/campaigns', label: 'Campaigns' },
   { href: '/grants', label: 'Access Grants' },
   { href: '/access-requests', label: 'Access Requests' },
-  { href: '/apps', label: 'Apps' },
-  { href: '/app-access-requests', label: 'App Requests' },
   { href: '/resourcing', label: 'Resourcing' },
   { href: '/data-sources', label: 'Data Sources' },
   { href: '/settings', label: 'Settings' },

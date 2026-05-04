@@ -10,7 +10,6 @@ export default async function UserDetailPage({ params }: { params: { id: string 
     where: { id: params.id },
     include: {
       staffProfile: true,
-      permissions: true,
       accessGrants: { where: { revokedAt: null }, orderBy: { grantedAt: 'desc' } },
     },
   });
