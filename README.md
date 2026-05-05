@@ -13,14 +13,19 @@ Google Cloud IAP at the network layer.
 
 | Section | Path | Description |
 |---------|------|-------------|
+| Users | `/users` | Platform users (Google identities), with isAdmin flag |
 | Staff | `/staff` | View and manage staff records, metadata, external IDs |
+| Offices | `/offices` | Office records with change history |
+| Teams | `/teams` | Team membership and change history |
 | Accounts | `/accounts` | Client accounts with change history |
 | Campaigns | `/campaigns` | Campaign management with change logs |
-| Apps | `/apps` | App registration and permission management |
-| App Requests | `/app-access-requests` | Access request review workflow |
+| Access Grants | `/grants` | Per-resource grants for accounts / campaigns / staff / teams / offices |
+| Access Requests | `/access-requests` | Resource-scoped access request review workflow |
 | Resourcing | `/resourcing` | Search staff by skills, interests, certifications |
 | Data Sources | `/data-sources` | Sync configuration, run history, run details |
-| OAuth Clients | `/oauth-clients` | OAuth client management |
+| OAuth Clients | `/oauth-clients` | Server-side OAuth Agent Client management (broker flow) |
+| Settings → Trusted apps | `/settings/trusted-apps` | Origins + Google client_ids that may obtain tokens |
+| Settings → CORS allow-list | `/settings/cors-origins` | Legacy CORS allow-list view (now redirects into Trusted apps) |
 
 ## Data Sources Dashboard
 
