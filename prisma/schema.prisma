@@ -150,6 +150,10 @@ model Staff {
   grantsRevoked       AccessGrant[]      @relation("AccessGrantRevokedByStaff")
   reviewedRequests AccessRequest[] @relation("AccessRequestReviewedByStaff")
   metadata         StaffMetadata[]
+  // Bot credentials this operator clicked Authorize on (Settings → Sync
+  // Credentials). Mirrors the existing actor pattern.
+  botCredentialsAuthorized BotCredential[]   @relation("BotCredentialAuthorizedByStaff")
+  oauthStateTokens         OAuthStateToken[] @relation("OAuthStateTokenStaff")
 
   @@index([userId])
   @@index([officeId])
@@ -569,4 +573,53 @@ model DriveSyncState {
   updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
   @@map("drive_sync_state")
+}
+
+// ── Bot OAuth credentials (auth-no-DWD migration, Phase 4) ─────────────────
+// Long-lived OAuth refresh tokens for unattended Workspace syncs. gub-admin
+// is the WRITER (the OAuth callback at /api/sync-credentials/oauth-callback
+// inserts/upserts here). GUB backend reads via its own Prisma client at sync
+// time. Migration lives in gcp-universal-backend (20260507000000); this
+// declaration gives gub-admin's Prisma client typed access.
+//
+// CHECK constraint on bot_name (enforced server-side in the migration)
+// limits the closed set to 'directory' | 'drive' | 'groups'. Adding a new
+// bot is a deliberate code+migration change. See
+// gcp-universal-backend/docs/proposals/auth-no-dwd.md and bot-oauth-design.md.
+model BotCredential {
+  id                  String    @id @default(uuid()) @db.Uuid
+  botName             String    @unique @map("bot_name")
+  googleEmail         String    @map("google_email")
+  refreshToken        String    @map("refresh_token")
+  scopes              String[]
+  oauthClientId       String    @map("oauth_client_id")
+  // Staff.id of the operator who clicked Authorize. Mirrors the existing
+  // actor pattern (trusted_apps.added_by).
+  authorizedByStaffId String?   @map("authorized_by_staff_id") @db.Uuid
+  authorizedAt        DateTime  @default(now()) @map("authorized_at") @db.Timestamptz
+  lastUsedAt          DateTime? @map("last_used_at") @db.Timestamptz
+  notes               String?
+
+  authorizedByStaff Staff? @relation("BotCredentialAuthorizedByStaff", fields: [authorizedByStaffId], references: [id])
+
+  @@index([botName])
+  @@map("bot_credentials")
+}
+
+// Short-lived CSRF state for the bot-OAuth callback. Single-use; written by
+// /api/sync-credentials/[botName]/start-authorize, validated and deleted by
+// /api/sync-credentials/oauth-callback.
+model OAuthStateToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  state     String   @unique
+  staffId   String   @map("staff_id") @db.Uuid
+  botName   String   @map("bot_name")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+
+  staff Staff @relation("OAuthStateTokenStaff", fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([state])
+  @@index([expiresAt])
+  @@map("oauth_state_tokens")
 }

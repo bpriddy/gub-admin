@@ -15,6 +15,12 @@ const SETTINGS = [
     description:
       'Server-side / agent clients registered with the GUB OAuth broker. Register, edit, deactivate, or delete entries; the client_secret is shown once at creation.',
   },
+  {
+    href: '/settings/sync-credentials',
+    title: 'Sync Credentials',
+    description:
+      'Authorize the bot users that GUB uses to sync Workspace data (directory, drive, groups). One-time consent per bot; refresh tokens persist until re-authorized. Replaces the prior service-account + Domain-Wide Delegation model.',
+  },
 ] as const;
 
 export default function SettingsIndexPage() {
