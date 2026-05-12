@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
  */
 const SYNC_ENDPOINTS: Record<string, string> = {
   google_directory: '/integrations/google-directory/cron',
+  google_groups: '/integrations/google-groups/cron',
   // Note: the Drive endpoint on the backend is `authenticate + requireAdmin`;
   // google-directory/cron is unauthenticated. Until that inconsistency is
   // resolved (shared secret, service-to-service IAM, or dropping auth to
