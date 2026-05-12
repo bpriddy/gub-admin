@@ -52,7 +52,18 @@ const BOT_SCOPES: Record<BotName, readonly string[]> = {
     USERINFO_EMAIL,
   ],
   drive: [
+    // Drive listing + binary downloads (PDFs, Word, images, etc.) via
+    // files.get?alt=media.
     'https://www.googleapis.com/auth/drive.readonly',
+    // Read structured content of Google-native files via the dedicated
+    // Workspace APIs (documents.get, presentations.get,
+    // spreadsheets.values.batchGet). The Drive `files.export` path is
+    // not the canonical read path for these and is subject to a
+    // separate DLP "no export" policy — see
+    // feedback_use_conventional_documented_apis.md.
+    'https://www.googleapis.com/auth/documents.readonly',
+    'https://www.googleapis.com/auth/presentations.readonly',
+    'https://www.googleapis.com/auth/spreadsheets.readonly',
     USERINFO_EMAIL,
   ],
   groups: [
