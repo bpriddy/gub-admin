@@ -6,15 +6,53 @@
  * persists the refresh token, and redirects back to the Settings page
  * with a success/error indicator.
  *
- * Critical security path:
- *   1. State token must exist and be unexpired
- *   2. State token must belong to the currently-authenticated operator
- *      (defends against a phished callback URL)
- *   3. State token is deleted before the exchange (single-use)
- *   4. Token exchange happens with our dedicated bot OAuth client_id +
- *      client_secret — Google verifies these against the redirect_uri
- *   5. Refresh token is persisted; existing row for the same bot_name is
- *      replaced (re-authorize semantics)
+ * ── Deployment requirement: this path MUST be exempt from IAP ──────────────
+ *
+ * When IAP fronts gub-admin in deployed environments, the bot user's
+ * browser (signed into Google as the bot, NOT as an admin) cannot pass
+ * IAP — IAP rejects unauthorized identities, and the bot is not
+ * authorized to use gub-admin. So Google's redirect to this callback URL
+ * would fail before any of our code runs.
+ *
+ * The fix: configure IAP at the load balancer to exempt this exact path.
+ * The route's security gate is the OAuth state token — single-use, 32-byte
+ * random, 10-min TTL, server-generated, bound to a real authenticated
+ * admin at start-authorize time. IAP on the callback would be
+ * redundant; state validation is what matters. This matches industry
+ * standard for OAuth 2.0 callbacks (Auth0, Stripe Connect, GitHub OAuth
+ * — none of them gate the callback behind a second auth layer).
+ *
+ * Operator: see docs/proposals/bot-oauth-design.md "Deployment — IAP
+ * exemption" for the exact load balancer config.
+ *
+ * ── Critical security path ─────────────────────────────────────────────────
+ *
+ *   1. State token must exist in oauth_state_tokens and be unexpired
+ *      (proves the flow was started by an authenticated admin within
+ *      the last 10 minutes — admin must have passed IAP to hit
+ *      start-authorize, which inserted the state row).
+ *   2. State token is deleted before the exchange (single-use; defeats
+ *      replay).
+ *   3. Token exchange happens with our dedicated bot OAuth client_id +
+ *      client_secret. Google verifies these against the redirect_uri it
+ *      issued the code for; an attacker can't forge a code.
+ *   4. Refresh token is persisted; existing row for the same bot_name is
+ *      replaced (re-authorize semantics). The audit field
+ *      `authorized_by_staff_id` carries the staff who STARTED the flow
+ *      (from the state row) — not whoever happens to be in browser
+ *      session at callback time.
+ *
+ * ── What we deliberately don't do ──────────────────────────────────────────
+ *
+ *   - Verify the IAP identity of the caller via `requireActor()`. Pre-IAP-
+ *     exemption, that check made sense (the operator's session would
+ *     still be live). Post-IAP-exemption, the caller IS the bot user's
+ *     browser; there's no actor identity to read. The state token is
+ *     the binding between "an admin started this" and "this callback
+ *     completes that flow."
+ *   - Verify the request's `Origin` header. Google's redirect doesn't
+ *     send one; this is a top-level navigation, not a cross-origin
+ *     request.
  *
  * Failure modes redirect to Settings with `?error=<code>` so the page
  * can render a useful message. We never echo Google's raw error
@@ -23,7 +61,6 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireActor } from '@/lib/actor';
 import {
   decodeIdTokenEmail,
   exchangeCodeForTokens,
@@ -47,15 +84,10 @@ function redirectToSettings(
 }
 
 export async function GET(request: NextRequest) {
-  // Require actor — the callback runs in the operator's session, so this
-  // should always be present unless someone hand-crafted the URL.
-  const actor = await requireActor();
-  if ('response' in actor) {
-    // Bypass the JSON 403 — redirect to Settings with an error code so
-    // the operator sees something coherent.
-    return redirectToSettings(request, 'error', 'unauthorized');
-  }
-  const { actorId } = actor;
+  // No IAP-identity check here. This route MUST be exempt from IAP at the
+  // load balancer in deployed envs — the bot user's browser cannot pass
+  // IAP. Security gate is the state token validated below. See the
+  // module docstring "Deployment requirement" section.
 
   const url = new URL(request.url);
   const error = url.searchParams.get('error');
@@ -64,11 +96,11 @@ export async function GET(request: NextRequest) {
 
   // User denied consent or Google reported an error.
   if (error) {
-    // Best-effort: delete any state row matching this user (their flow's
-    // dead anyway). Don't block on this.
+    // Best-effort cleanup of the (now-dead) state row. State is a unique
+    // server-generated random; no staff scoping needed.
     if (state) {
       await prisma.oAuthStateToken
-        .deleteMany({ where: { state, staffId: actorId } })
+        .deleteMany({ where: { state } })
         .catch(() => undefined);
     }
     return redirectToSettings(request, 'error', 'consent_denied');
@@ -93,10 +125,13 @@ export async function GET(request: NextRequest) {
       .catch(() => undefined);
     return redirectToSettings(request, 'error', 'state_expired');
   }
-  if (stateRow.staffId !== actorId) {
-    // Phishing attempt: someone is finishing a flow they didn't start.
-    return redirectToSettings(request, 'error', 'state_user_mismatch');
-  }
+  // Note: we deliberately do NOT verify that some "current actor" matches
+  // stateRow.staffId here — there is no actor identity at the callback
+  // (IAP is exempt). The state token's existence + freshness + single-use
+  // semantics ARE the proof that this is a real flow started by an
+  // authenticated admin within the last 10 minutes. The admin's identity
+  // is preserved as stateRow.staffId for the audit trail below.
+
   if (!isKnownBot(stateRow.botName)) {
     // Defensive — the state row's bot_name should always be valid because
     // start-authorize guards on it. Belt-and-suspenders.
@@ -139,6 +174,9 @@ export async function GET(request: NextRequest) {
 
   // ── Persist credential ───────────────────────────────────────────────────
   // Upsert by bot_name. Re-authorize replaces the existing row entirely.
+  // authorizedByStaffId comes from the state row (set at start-authorize by
+  // a verified IAP-authenticated admin), not from any "current actor" at
+  // callback time — see the deletion of requireActor() above.
   await prisma.botCredential.upsert({
     where: { botName },
     create: {
@@ -147,7 +185,7 @@ export async function GET(request: NextRequest) {
       refreshToken: tokens.refresh_token!, // exchangeCodeForTokens guarantees this
       scopes: tokens.scope?.split(' ').filter(Boolean) ?? [],
       oauthClientId: config.clientId,
-      authorizedByStaffId: actorId,
+      authorizedByStaffId: stateRow.staffId,
       authorizedAt: new Date(),
       // lastUsedAt left null — gets bumped on first runtime use.
     },
@@ -156,7 +194,7 @@ export async function GET(request: NextRequest) {
       refreshToken: tokens.refresh_token!,
       scopes: tokens.scope?.split(' ').filter(Boolean) ?? [],
       oauthClientId: config.clientId,
-      authorizedByStaffId: actorId,
+      authorizedByStaffId: stateRow.staffId,
       authorizedAt: new Date(),
       lastUsedAt: null, // Reset — re-authorize is a fresh start.
     },
