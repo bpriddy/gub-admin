@@ -25,12 +25,12 @@ model User {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  refreshTokens   RefreshToken[]
-  externalIds     UserExternalId[]
-  staffProfile    Staff?
-  accessGrants    AccessGrant[]
-  accessRequests  AccessRequest[]
-  oauthAuthCodes  OAuthAuthCode[]
+  refreshTokens  RefreshToken[]
+  externalIds    UserExternalId[]
+  staffProfile   Staff?
+  accessGrants   AccessGrant[]
+  accessRequests AccessRequest[]
+  oauthAuthCodes OAuthAuthCode[]
 
   @@map("users")
 }
@@ -135,25 +135,30 @@ model Staff {
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
-  user             User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
-  office           Office?         @relation(fields: [officeId], references: [id], onDelete: SetNull)
-  teamMemberships  TeamMember[]
-  externalIds      StaffExternalId[]
-  changes          StaffChange[]
-  accountChanges   AccountChange[]  @relation("AccountChangedByStaff")
-  campaignsCreated Campaign[]       @relation("CampaignCreatedByStaff")
-  campaignChanges  CampaignChange[] @relation("CampaignChangedByStaff")
-  officeChanges    OfficeChange[]   @relation("OfficeChangedByStaff")
-  teamChanges      TeamChange[]     @relation("TeamChangedByStaff")
-  auditActions        AuditLog[]         @relation("AuditLogActorStaff")
-  grantsGiven         AccessGrant[]      @relation("AccessGrantGrantedByStaff")
-  grantsRevoked       AccessGrant[]      @relation("AccessGrantRevokedByStaff")
-  reviewedRequests AccessRequest[] @relation("AccessRequestReviewedByStaff")
-  metadata         StaffMetadata[]
+  user                     User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  office                   Office?                @relation(fields: [officeId], references: [id], onDelete: SetNull)
+  teamMemberships          TeamMember[]
+  externalIds              StaffExternalId[]
+  changes                  StaffChange[]
+  accountChanges           AccountChange[]        @relation("AccountChangedByStaff")
+  campaignsCreated         Campaign[]             @relation("CampaignCreatedByStaff")
+  campaignChanges          CampaignChange[]       @relation("CampaignChangedByStaff")
+  officeChanges            OfficeChange[]         @relation("OfficeChangedByStaff")
+  teamChanges              TeamChange[]           @relation("TeamChangedByStaff")
+  auditActions             AuditLog[]             @relation("AuditLogActorStaff")
+  grantsGiven              AccessGrant[]          @relation("AccessGrantGrantedByStaff")
+  grantsRevoked            AccessGrant[]          @relation("AccessGrantRevokedByStaff")
+  reviewedRequests         AccessRequest[]        @relation("AccessRequestReviewedByStaff")
+  metadata                 StaffMetadata[]
   // Bot credentials this operator clicked Authorize on (Settings → Sync
   // Credentials). Mirrors the existing actor pattern.
-  botCredentialsAuthorized BotCredential[]   @relation("BotCredentialAuthorizedByStaff")
-  oauthStateTokens         OAuthStateToken[] @relation("OAuthStateTokenStaff")
+  botCredentialsAuthorized BotCredential[]        @relation("BotCredentialAuthorizedByStaff")
+  oauthStateTokens         OAuthStateToken[]      @relation("OAuthStateTokenStaff")
+  // Deep-research dossiers about this staff member. Migration owned by
+  // gcp-universal-backend (20260513000000_research_jobs_and_dossiers);
+  // gub-admin hosts the worker that writes these.
+  researchJobs             ResearchJob[]
+  researchDossiers         StaffResearchDossier[]
 
   @@index([userId])
   @@index([officeId])
@@ -164,15 +169,15 @@ model Staff {
 // Append-only change log for staff — same pattern as account_changes / office_changes.
 // source: 'okta_sync' | 'okta_webhook' | 'admin' (how the change arrived)
 model StaffChange {
-  id          String    @id @default(uuid()) @db.Uuid
-  staffId     String    @map("staff_id") @db.Uuid
-  property    String
-  valueText   String?   @map("value_text")
-  valueUuid   String?   @map("value_uuid") @db.Uuid
-  valueDate   DateTime? @map("value_date") @db.Date
-  valueIsPii  Boolean   @default(false) @map("value_is_pii")
-  source      String    @default("admin")
-  changedAt   DateTime  @default(now()) @map("changed_at") @db.Timestamptz
+  id         String    @id @default(uuid()) @db.Uuid
+  staffId    String    @map("staff_id") @db.Uuid
+  property   String
+  valueText  String?   @map("value_text")
+  valueUuid  String?   @map("value_uuid") @db.Uuid
+  valueDate  DateTime? @map("value_date") @db.Date
+  valueIsPii Boolean   @default(false) @map("value_is_pii")
+  source     String    @default("admin")
+  changedAt  DateTime  @default(now()) @map("changed_at") @db.Timestamptz
 
   staff Staff @relation(fields: [staffId], references: [id], onDelete: Cascade)
 
@@ -225,8 +230,8 @@ model AccountChange {
   changedBy String    @map("changed_by") @db.Uuid
   changedAt DateTime  @default(now()) @map("changed_at") @db.Timestamptz
 
-  account         Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  changedByStaff  Staff   @relation("AccountChangedByStaff", fields: [changedBy], references: [id])
+  account        Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  changedByStaff Staff   @relation("AccountChangedByStaff", fields: [changedBy], references: [id])
 
   @@index([accountId, property, changedAt(sort: Desc)])
   @@map("account_changes")
@@ -248,9 +253,9 @@ model Campaign {
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
-  account          Account          @relation(fields: [accountId], references: [id])
-  createdByStaff   Staff            @relation("CampaignCreatedByStaff", fields: [createdBy], references: [id])
-  changes          CampaignChange[]
+  account        Account          @relation(fields: [accountId], references: [id])
+  createdByStaff Staff            @relation("CampaignCreatedByStaff", fields: [createdBy], references: [id])
+  changes        CampaignChange[]
 
   @@index([accountId])
   @@index([status])
@@ -622,4 +627,61 @@ model OAuthStateToken {
   @@index([state])
   @@index([expiresAt])
   @@map("oauth_state_tokens")
+}
+
+// ── Deep-research dossier pipeline ─────────────────────────────────────────
+// Migration owned by gcp-universal-backend
+// (prisma/migrations/20260513000000_research_jobs_and_dossiers). The tables
+// are in the shared GUB database; gub-admin reads + writes them via its own
+// Prisma client because the worker (Cloud-Scheduler-fired process-next
+// endpoint) lives here.
+//
+// Two-table model:
+//   ResearchJob          — the queue (one row per enqueue request)
+//   StaffResearchDossier — the artifact (one row per successful generation)
+//
+// See the GUB schema for the full ADR-style comment.
+
+model ResearchJob {
+  id                    String    @id @default(uuid()) @db.Uuid
+  staffId               String    @map("staff_id") @db.Uuid
+  provider              String // 'perplexity_agent' (v1 only)
+  preset                String // 'deep-research' | 'advanced-deep-research'
+  promptTemplateVersion String    @map("prompt_template_version")
+  status                String    @default("queued") // queued | running | completed | failed
+  attempts              Int       @default(0)
+  nextAttemptAt         DateTime? @map("next_attempt_at") @db.Timestamptz
+  resultDossierId       String?   @map("result_dossier_id") @db.Uuid
+  error                 String?   @db.Text
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  startedAt             DateTime? @map("started_at") @db.Timestamptz
+  completedAt           DateTime? @map("completed_at") @db.Timestamptz
+
+  staff         Staff                 @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  resultDossier StaffResearchDossier? @relation(fields: [resultDossierId], references: [id], onDelete: SetNull)
+
+  @@index([status, nextAttemptAt])
+  @@index([staffId])
+  @@map("research_jobs")
+}
+
+model StaffResearchDossier {
+  id                    String   @id @default(uuid()) @db.Uuid
+  staffId               String   @map("staff_id") @db.Uuid
+  provider              String
+  preset                String
+  promptTemplateVersion String   @map("prompt_template_version")
+  contentMarkdown       String   @map("content_markdown") @db.Text
+  citations             Json?
+  searchResults         Json?    @map("search_results")
+  usageMetadata         Json?    @map("usage_metadata")
+  confidence            String?
+  generatedAt           DateTime @default(now()) @map("generated_at") @db.Timestamptz
+
+  staff Staff         @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  jobs  ResearchJob[]
+
+  @@unique([staffId, provider, preset, promptTemplateVersion])
+  @@index([staffId])
+  @@map("staff_research_dossiers")
 }
