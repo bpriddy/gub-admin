@@ -7,10 +7,11 @@ import { enqueueResearchJobs } from '@/lib/research/enqueue';
  * Only sources with an active sync engine are listed here.
  *
  * Note on perplexity_deep_research: unlike the Google syncs (which proxy
- * to GUB), this one is fully in-gub-admin — the trigger calls our own
- * /api/research-jobs/enqueue route directly with the full active-staff
- * list. The body shape there differs from the Google `cron` endpoints,
- * so it cannot share this map and is handled by a special-case below.
+ * to GUB), this one is handled in-gub-admin. The Sync button (a human
+ * behind IAP) calls enqueueResearchJobs() directly — it inserts
+ * research_jobs rows and fires the gub-research-worker Cloud Run Job via
+ * the Admin API. No GUB proxy, no Cloud Scheduler, no HTTP enqueue
+ * endpoint. Handled by the INTERNAL_SOURCES special-case below.
  */
 const SYNC_ENDPOINTS: Record<string, string> = {
   google_directory: '/integrations/google-directory/cron',
@@ -35,8 +36,8 @@ export async function POST(_request: Request, { params }: { params: { key: strin
   }
 
   // In-gub-admin sources: enqueue research jobs for every active staff
-  // member with no current dossier. The worker (Cloud-Scheduler-fired
-  // process-next route) does the actual work.
+  // member with no current dossier, then fire the worker Job. The
+  // gub-research-worker Cloud Run Job drains the queue.
   if (INTERNAL_SOURCES.has(params.key)) {
     if (params.key === 'perplexity_deep_research') {
       const activeStaff = await prisma.staff.findMany({

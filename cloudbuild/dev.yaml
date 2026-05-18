@@ -70,7 +70,11 @@ steps:
       # traces + verbose errors, AND would weaken the IAP_DEV_EMAIL bypass
       # guard in src/lib/iap-dev-bypass.ts — it MUST stay 'production' on
       # every deployed Cloud Run revision.
-      - --set-env-vars=NODE_ENV=production,GCP_PROJECT_ID=$PROJECT_ID,GUB_BACKEND_URL=$_GUB_BACKEND_URL
+      # GCP_REGION + RESEARCH_JOB_NAME let the perplexity_deep_research
+      # Sync button fire the gub-research-worker Cloud Run Job via the
+      # Admin API (src/lib/research/trigger-job.ts). Non-fatal if absent —
+      # enqueue still works, the drain just waits for the next trigger.
+      - --set-env-vars=NODE_ENV=production,GCP_PROJECT_ID=$PROJECT_ID,GCP_REGION=$_REGION,RESEARCH_JOB_NAME=gub-research-worker-dev,GUB_BACKEND_URL=$_GUB_BACKEND_URL
       - --set-secrets=DATABASE_URL=$_DB_SECRET:latest
       - --add-cloudsql-instances=$PROJECT_ID:$_REGION:$_CLOUDSQL_INSTANCE
     waitFor: [push]
