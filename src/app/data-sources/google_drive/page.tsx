@@ -27,6 +27,7 @@ import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import { AutoRefresh } from '../[key]/auto-refresh';
 import { AccountBackfillRow } from './account-backfill-row';
+import { RequestRow } from './request-row';
 
 export const dynamic = 'force-dynamic';
 
@@ -245,12 +246,13 @@ export default async function DriveBackfillPage() {
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Scans</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">By</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Summary</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-600"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {recentRequests.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
                     No backfill requests yet. Click a row&apos;s <strong>Backfill</strong> button to queue one.
                   </td>
                 </tr>
@@ -259,38 +261,21 @@ export default async function DriveBackfillPage() {
                 const summaryLine = req.errorMessage
                   ? req.errorMessage
                   : (req.logSummary?.split('\n').filter(Boolean).pop() ?? '');
-                const truncatedSummary =
-                  summaryLine.length > 80 ? summaryLine.slice(0, 80) + '…' : summaryLine;
                 return (
-                  <tr key={req.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
-                      {timeAgo(req.requestedAt)}
-                    </td>
-                    <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{req.account.name}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full ${
-                          STATUS_BADGES[req.status] ?? 'bg-gray-100 text-gray-600'
-                        }`}
-                      >
-                        {req.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-gray-700">
-                      {req.scansDone}/{req.scans}
-                    </td>
-                    <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
-                      {req.requestedByStaff?.fullName ?? req.requestedByStaff?.email ?? '—'}
-                    </td>
-                    <td
-                      className={`px-4 py-3 text-xs font-mono whitespace-nowrap ${
-                        req.errorMessage ? 'text-red-700' : 'text-gray-500'
-                      }`}
-                      title={req.errorMessage ?? req.logSummary ?? ''}
-                    >
-                      {truncatedSummary || '—'}
-                    </td>
-                  </tr>
+                  <RequestRow
+                    key={req.id}
+                    id={req.id}
+                    status={req.status}
+                    accountName={req.account.name}
+                    ago={timeAgo(req.requestedAt)}
+                    scansDone={req.scansDone}
+                    scans={req.scans}
+                    requestedBy={
+                      req.requestedByStaff?.fullName ?? req.requestedByStaff?.email ?? '—'
+                    }
+                    summary={summaryLine}
+                    hasError={!!req.errorMessage}
+                  />
                 );
               })}
             </tbody>
