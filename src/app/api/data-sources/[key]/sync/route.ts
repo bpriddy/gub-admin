@@ -1,31 +1,30 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { enqueueResearchJobs } from '@/lib/research/enqueue';
+import { triggerDriveSyncJob, TriggerJobError } from '@/lib/drive-sync/trigger-job';
 
 /**
  * Maps data source keys to their backend sync trigger endpoints.
- * Only sources with an active sync engine are listed here.
+ * Only sources still proxied via HTTP to GUB are listed here.
  *
- * Note on perplexity_deep_research: unlike the Google syncs (which proxy
- * to GUB), this one is handled in-gub-admin. The Sync button (a human
- * behind IAP) calls enqueueResearchJobs() directly — it inserts
- * research_jobs rows and fires the gub-research-worker Cloud Run Job via
- * the Admin API. No GUB proxy, no Cloud Scheduler, no HTTP enqueue
- * endpoint. Handled by the INTERNAL_SOURCES special-case below.
+ * Notes:
+ *   - perplexity_deep_research: handled in-gub-admin via the
+ *     INTERNAL_SOURCES branch below — enqueueResearchJobs() inserts
+ *     research_jobs and fires the gub-research-worker Cloud Run Job via
+ *     the Admin API.
+ *   - google_drive: handled in-gub-admin via the INTERNAL_SOURCES branch
+ *     below — fires the gub-drive-sync Cloud Run Job via the Admin API
+ *     (mode=run-full-sync). No HTTP, no GUB hop. The reviewer-facing
+ *     /review endpoints stay in GUB, but they're not on this trigger
+ *     surface.
  */
 const SYNC_ENDPOINTS: Record<string, string> = {
   google_directory: '/integrations/google-directory/cron',
   google_groups: '/integrations/google-groups/cron',
-  // Note: the Drive endpoint on the backend is `authenticate + requireAdmin`;
-  // google-directory/cron is unauthenticated. Until that inconsistency is
-  // resolved (shared secret, service-to-service IAM, or dropping auth to
-  // match), triggering Drive from this proxy will 401. Flagged as an open
-  // item — see DriveSync plan memory.
-  google_drive: '/integrations/google-drive/run-full-sync',
 };
 
 /** Data source keys handled internally by gub-admin (not proxied to GUB). */
-const INTERNAL_SOURCES = new Set(['perplexity_deep_research']);
+const INTERNAL_SOURCES = new Set(['perplexity_deep_research', 'google_drive']);
 
 const GUB_URL = process.env['GUB_BACKEND_URL'] ?? process.env['NEXT_PUBLIC_GUB_URL'] ?? 'http://localhost:3000';
 
@@ -35,9 +34,9 @@ export async function POST(_request: Request, { params }: { params: { key: strin
     return NextResponse.json({ error: 'Data source not found' }, { status: 404 });
   }
 
-  // In-gub-admin sources: enqueue research jobs for every active staff
-  // member with no current dossier, then fire the worker Job. The
-  // gub-research-worker Cloud Run Job drains the queue.
+  // In-gub-admin sources: trigger a Cloud Run Job via the Admin API. No
+  // HTTP to GUB; no IAP traversal (we are behind IAP; the Admin API is
+  // IAM-gated, not IAP-gated). The Job runs without a user session.
   if (INTERNAL_SOURCES.has(params.key)) {
     if (params.key === 'perplexity_deep_research') {
       const activeStaff = await prisma.staff.findMany({
@@ -46,6 +45,19 @@ export async function POST(_request: Request, { params }: { params: { key: strin
       });
       const result = await enqueueResearchJobs({ staffIds: activeStaff.map((s) => s.id) });
       return NextResponse.json({ status: 'triggered', ...result });
+    }
+    if (params.key === 'google_drive') {
+      try {
+        await triggerDriveSyncJob({ mode: 'run-full-sync' });
+        return NextResponse.json({ status: 'triggered', mode: 'run-full-sync' });
+      } catch (err) {
+        const detail =
+          err instanceof TriggerJobError ? err.message : (err as Error).message;
+        return NextResponse.json(
+          { error: 'Failed to trigger gub-drive-sync Job', detail },
+          { status: 502 },
+        );
+      }
     }
     return NextResponse.json({ error: 'unhandled internal source' }, { status: 500 });
   }

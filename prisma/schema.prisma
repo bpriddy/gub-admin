@@ -159,6 +159,7 @@ model Staff {
   // gub-admin hosts the worker that writes these.
   researchJobs             ResearchJob[]
   researchDossiers         StaffResearchDossier[]
+  driveBackfillsRequested  DriveBackfillRequest[] @relation("DriveBackfillRequestedBy")
 
   @@index([userId])
   @@index([officeId])
@@ -202,18 +203,65 @@ model StaffExternalId {
 // ── Accounts ───────────────────────────────────────────────────────────────
 
 model Account {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String
-  parentId  String?  @map("parent_id") @db.Uuid
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  id             String   @id @default(uuid()) @db.Uuid
+  name           String
+  parentId       String?  @map("parent_id") @db.Uuid
+  /// Canonical human-readable snapshot of the account. Written by the
+  /// Drive sync pipeline (synthesis on review approval, or backfill
+  /// auto-apply). Shape: edited_at header + "## At a glance" bullets +
+  /// "## Context" bullets. See docs/status-markdown-plan.md.
+  statusMarkdown String?  @map("status_markdown") @db.Text
+  /// Sensitive companion. Separate column so access enforcement is at
+  /// column-SELECT (not section parsing). See D29 in
+  /// docs/status-markdown-plan.md.
+  statusSensitiveMarkdown String? @map("status_sensitive_markdown") @db.Text
+  /// Root Drive folder owned by this account. Set from the Data Sources
+  /// page; consumed by gub-drive-sync's backfill engine.
+  driveFolderId  String?  @map("drive_folder_id")
+  /// Timestamp of the most recent backfill scan against this account's
+  /// folder. Updated by the gub-drive-sync watcher on completion.
+  driveLastScannedAt DateTime? @map("drive_last_scanned_at") @db.Timestamptz
+  /// Daily-scan backfill cursor (DATE). Set by gub-drive-sync backfill.
+  driveBackfillCursor DateTime? @map("drive_backfill_cursor") @db.Date
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   parent    Account?        @relation("AccountHierarchy", fields: [parentId], references: [id])
   children  Account[]       @relation("AccountHierarchy")
   changes   AccountChange[]
   campaigns Campaign[]
+  driveBackfillRequests DriveBackfillRequest[]
 
   @@map("accounts")
+}
+
+/// Operator-initiated backfill triggers from the Data Sources page.
+/// gub-drive-sync's watch mode polls this table for pending rows and
+/// drives each through the backfill core. Migration owned by
+/// gcp-universal-backend (20260605000000_drive_backfill_requests).
+model DriveBackfillRequest {
+  id            String    @id @default(uuid()) @db.Uuid
+  accountId     String    @map("account_id") @db.Uuid
+  scans         Int       @default(1)
+  requestedBy   String    @map("requested_by") @db.Uuid
+  requestedAt   DateTime  @default(now()) @map("requested_at") @db.Timestamptz
+  startedAt     DateTime? @map("started_at") @db.Timestamptz
+  completedAt   DateTime? @map("completed_at") @db.Timestamptz
+  status        String    @default("pending")
+  errorMessage  String?   @map("error_message")
+  scansDone     Int       @default(0) @map("scans_done")
+  logSummary    String?   @map("log_summary")
+  /// SKIP-LOCKED claim increments this; retry-in-loop decides backoff vs terminal-failure on it.
+  attempts      Int       @default(0)
+  /// Earliest re-claim time after transient failure (exponential backoff).
+  nextAttemptAt DateTime? @map("next_attempt_at") @db.Timestamptz
+
+  account     Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  requestedByStaff Staff @relation("DriveBackfillRequestedBy", fields: [requestedBy], references: [id])
+
+  @@index([status, nextAttemptAt, requestedAt], map: "drive_backfill_requests_pickup_idx")
+  @@index([accountId, requestedAt(sort: Desc)], map: "drive_backfill_requests_history_idx")
+  @@map("drive_backfill_requests")
 }
 
 // Append-only log of account property changes.
@@ -249,6 +297,11 @@ model Campaign {
   awardedAt DateTime? @map("awarded_at") @db.Date
   liveAt    DateTime? @map("live_at") @db.Date
   endsAt    DateTime? @map("ends_at") @db.Date
+  /// Canonical human-readable snapshot of the campaign. Same shape as
+  /// Account.statusMarkdown. Written by the Drive sync pipeline.
+  statusMarkdown String? @map("status_markdown") @db.Text
+  /// Sensitive companion. See D29 in docs/status-markdown-plan.md.
+  statusSensitiveMarkdown String? @map("status_sensitive_markdown") @db.Text
   createdBy String    @map("created_by") @db.Uuid
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz

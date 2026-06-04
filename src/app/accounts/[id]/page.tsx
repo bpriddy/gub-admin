@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import AccountForm from '../AccountForm';
+import StatusMarkdownPanel from '../../StatusMarkdownPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +30,11 @@ export default async function AccountDetailPage({ params }: { params: { id: stri
       </div>
 
       <AccountForm account={account} accounts={allAccounts} />
+
+      <StatusMarkdownPanel
+        markdown={account.statusMarkdown}
+        sensitiveMarkdown={account.statusSensitiveMarkdown}
+      />
 
       {account.campaigns.length > 0 && (
         <div className="mt-6 p-4 bg-white border border-gray-200 rounded-lg">

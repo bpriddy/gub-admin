@@ -1,39 +1,34 @@
 /**
- * /data-sources/google_drive — Drive sync settings page.
+ * /data-sources/google_drive — Drive backfill control surface.
  *
- * Different shape from the generic [key]/page.tsx because Drive has:
- *   - Polling state (drive_sync_state singleton — page token, last poll
- *     outcome) that lives outside the data_sources/sync_runs schema.
- *   - Admin-controlled cadence on the Cloud Scheduler job (Pattern A) —
- *     the page reads the live cron from the Scheduler API rather than a
- *     stored value, so what's displayed reflects what's deployed.
- *   - A "bootstrap_required" state distinct from "errored" or "running",
- *     surfaced in the status panel with the matching recovery action.
+ * Operator-facing page for the per-account backfill workflow. Replaced
+ * the prior polling-architecture page (driveSyncState + Cloud Scheduler
+ * cron) when Drive's machine endpoints moved to gub-drive-sync as a
+ * standalone Cloud Run Job. The new model is:
  *
- * Note: this literal `google_drive` segment takes precedence over the
- * dynamic `[key]` segment in Next.js routing.
+ *   - Each account carries its own `drive_folder_id` (the campaign tree's
+ *     root) and `drive_backfill_cursor` (the daily-scan walker's progress).
+ *   - The "Backfill" button writes a row to drive_backfill_requests; the
+ *     gub-drive-sync watcher picks it up and runs the backfill engine.
+ *   - This page shows the per-account state inline + recent queue activity.
+ *
+ * Page contents:
+ *   1. Per-account table — name / inline-editable drive_folder_id / last
+ *      backfill time / cursor / live status badge / Backfill button.
+ *   2. Recent backfill requests — last 10 across all accounts with status
+ *      and a one-line log summary.
+ *
+ * The route segment stays `google_drive` so existing navigation links
+ * keep working. This literal segment takes precedence over the dynamic
+ * `[key]` segment in Next.js routing.
  */
 
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import { AutoRefresh } from '../[key]/auto-refresh';
-import { RunDuration } from '../[key]/run-duration';
-import { SyncButton } from '../[key]/sync-button';
-import { CadenceEditor } from './cadence-editor';
-import { CADENCE_PRESETS, type CadenceKey } from '@/lib/drive-cadence';
-import { getDrivePollJob, type DrivePollJobInfo } from '@/lib/cloud-scheduler';
+import { AccountBackfillRow } from './account-backfill-row';
 
 export const dynamic = 'force-dynamic';
-
-const SOURCE_KEY = 'google_drive';
-
-const OUTCOME_BADGES: Record<string, string> = {
-  no_changes: 'bg-gray-100 text-gray-600',
-  changes_dispatched: 'bg-blue-100 text-blue-700',
-  changes_pending_existing_run: 'bg-blue-100 text-blue-700',
-  bootstrap_required: 'bg-amber-100 text-amber-700',
-  errored: 'bg-red-100 text-red-700',
-};
 
 function formatTime(date: Date | null): string {
   if (!date) return '—';
@@ -57,48 +52,104 @@ function timeAgo(date: Date | null): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-interface SchedulerLoad {
-  job: DrivePollJobInfo | null;
-  matchedPreset: CadenceKey | null;
-  error: string | null;
+function formatCursorYmd(d: Date | null): string {
+  if (!d) return 'none';
+  return d.toISOString().slice(0, 10);
 }
 
-async function loadScheduler(): Promise<SchedulerLoad> {
-  try {
-    const job = await getDrivePollJob();
-    const matched = (Object.keys(CADENCE_PRESETS) as CadenceKey[]).find(
-      (k) => CADENCE_PRESETS[k].schedule === job.schedule,
-    );
-    return { job, matchedPreset: matched ?? null, error: null };
-  } catch (err) {
-    return {
-      job: null,
-      matchedPreset: null,
-      error: err instanceof Error ? err.message : 'Unknown Cloud Scheduler error',
-    };
-  }
+/**
+ * Pick the operator-facing button mode based on cursor age.
+ *
+ * The underlying operation is identical — both `sync` and `backfill`
+ * queue a 1-day scan via `processBackfillQueue`. The label just matches
+ * the operator's mental model:
+ *
+ *   - cursor < 7 days old or = today → "Sync" (we're current; this is
+ *     day-to-day refresh)
+ *   - cursor null (never scanned) or ≥ 7 days old → "Backfill" (we're
+ *     catching up; the gap is the point)
+ *
+ * One-week threshold is a UX heuristic, not a system constraint — easy
+ * to revisit if the operator's mental model shifts.
+ */
+const SYNC_CUTOFF_DAYS = 7;
+function backfillMode(cursor: Date | null): 'sync' | 'backfill' {
+  if (!cursor) return 'backfill';
+  const ageDays = Math.floor((Date.now() - cursor.getTime()) / (24 * 60 * 60 * 1000));
+  return ageDays < SYNC_CUTOFF_DAYS ? 'sync' : 'backfill';
 }
 
-export default async function DriveSyncDetailPage() {
-  // Pull state + scheduler info + run history in parallel — no point
-  // waiting sequentially when each is independent.
-  const [state, scheduler, runs] = await Promise.all([
-    prisma.driveSyncState.findUnique({ where: { id: 1 } }),
-    loadScheduler(),
-    prisma.syncRun.findMany({
-      where: { source: SOURCE_KEY },
-      orderBy: { startedAt: 'desc' },
-      take: 30,
+const STATUS_BADGES: Record<string, string> = {
+  pending: 'bg-amber-100 text-amber-700',
+  running: 'bg-blue-100 text-blue-700',
+  completed: 'bg-green-100 text-green-700',
+  failed: 'bg-red-100 text-red-700',
+};
+
+export default async function DriveBackfillPage() {
+  // Pull accounts (ordered alphabetically), live status per account
+  // (any pending/running request on that account), and the global recent
+  // requests list — all in parallel.
+  const [accounts, liveByAccount, recentRequests] = await Promise.all([
+    prisma.account.findMany({
+      where: { parentId: null }, // top-level accounts only
+      select: {
+        id: true,
+        name: true,
+        driveFolderId: true,
+        driveLastScannedAt: true,
+        driveBackfillCursor: true,
+      },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.driveBackfillRequest.findMany({
+      where: { status: { in: ['pending', 'running'] } },
+      select: { accountId: true, status: true, requestedAt: true },
+      orderBy: { requestedAt: 'desc' },
+    }),
+    prisma.driveBackfillRequest.findMany({
+      take: 10,
+      orderBy: { requestedAt: 'desc' },
+      include: {
+        account: { select: { id: true, name: true } },
+        requestedByStaff: { select: { fullName: true, email: true } },
+      },
     }),
   ]);
 
-  const outcome = state?.lastOutcome ?? 'bootstrap_required';
-  const isBootstrapRequired =
-    outcome === 'bootstrap_required' || state?.pageToken == null;
+  // Reduce live requests to a per-account status (most recent wins).
+  const livePerAccount = new Map<string, 'pending' | 'running'>();
+  for (const r of liveByAccount) {
+    if (!livePerAccount.has(r.accountId)) {
+      livePerAccount.set(r.accountId, r.status as 'pending' | 'running');
+    }
+  }
+
+  // Trigger-health hint. Pattern A is enqueue-as-trigger — every
+  // Backfill click also fires the Job via Cloud Run Admin API in the
+  // same request handler. A row that's still `pending` more than 2
+  // minutes after `requested_at` (Job cold start ~5s + typical work
+  // ~30s; 2min is generous) means the trigger likely failed — IAM
+  // misconfig, Job missing, or local dev (no GCP creds). Surface the
+  // hint and tell the operator the manual escape hatch.
+  const oldestPending = liveByAccount
+    .filter((r) => r.status === 'pending')
+    .map((r) => r.requestedAt.getTime())
+    .reduce<number | null>((min, t) => (min === null || t < min ? t : min), null);
+  const triggerLikelyFailed =
+    oldestPending !== null && Date.now() - oldestPending > 2 * 60 * 1000;
+
+  // Only poll when there's a live request to watch. Idle state = no
+  // refresh, no DB queries. Click flow re-enables polling: the
+  // Backfill button does router.refresh() on success, which re-runs
+  // this server component, picks up the new pending row, and the next
+  // render flips AutoRefresh's enabled prop to true. Polling shuts off
+  // again once the row terminates (completed/failed).
+  const hasLiveRequests = liveByAccount.length > 0;
 
   return (
     <div>
-      <AutoRefresh />
+      <AutoRefresh intervalMs={5000} enabled={hasLiveRequests} />
 
       <div className="mb-6">
         <Link href="/data-sources" className="text-sm text-gray-500 hover:text-gray-700">
@@ -110,188 +161,138 @@ export default async function DriveSyncDetailPage() {
       <div className="flex items-start justify-between mb-6">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-semibold">Google Drive</h1>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">
-              Active
-            </span>
+            <h1 className="text-xl font-semibold">Google Drive — Backfill</h1>
           </div>
           <p className="text-sm text-gray-500 mt-1 max-w-2xl">
-            Incremental polling via Drive&apos;s <code className="text-xs bg-gray-100 px-1 rounded">changes.list</code>{' '}
-            API. Cadence is controlled from this page; the &quot;Run sync now&quot; button forces a
-            full discover + scan and (re-)bootstraps the page token.
+            Per-account daily-scan backfill. Each <strong>Backfill</strong> click queues a
+            single-day scan from the account&apos;s current cursor and immediately
+            triggers the <code className="text-xs bg-gray-100 px-1 rounded mx-1">gub-drive-sync</code>
+            Cloud Run Job via the Admin API. The Job claims pending rows, runs them,
+            and persists field updates + synthesized status_markdown.
           </p>
         </div>
-        <SyncButton sourceKey={SOURCE_KEY} />
       </div>
 
-      {/* Bootstrap-required banner */}
-      {isBootstrapRequired && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg px-5 py-4 mb-6">
-          <div className="flex items-start gap-3">
-            <div className="text-amber-700 font-medium text-sm">
-              Bootstrap required
-            </div>
-            <div className="text-sm text-amber-800 flex-1">
-              No saved Drive page token. The next scheduled poll will return
-              503 until a full sync runs and persists a fresh start point.
-              Click <strong>Run sync now</strong> above when the IT-side setup
-              (DWD grant + bot user shared on Drives) is complete.
-            </div>
-          </div>
+      {triggerLikelyFailed && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-5 py-3 mb-6 text-sm text-amber-800">
+          <strong>Job trigger likely failed.</strong>{' '}
+          The oldest <code className="text-xs bg-white px-1 rounded">pending</code> request is
+          more than 2 minutes old without going to <code className="text-xs bg-white px-1 rounded">running</code>.
+          In prod that usually means IAM (gub-admin SA needs <code className="text-xs bg-white px-1 rounded">roles/run.developer</code>{' '}
+          on the Job) or a missing Job. Locally, run{' '}
+          <code className="text-xs bg-white px-1 rounded">npm run backfill-pending</code> in
+          your gub-drive-sync checkout to drain the queue manually.
         </div>
       )}
 
-      {/* Two-column status + cadence */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        {/* Status panel */}
-        <div className="bg-white border border-gray-200 rounded-lg px-5 py-4">
-          <h2 className="text-sm font-semibold text-gray-700 mb-3">Status</h2>
-          <dl className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <dt className="text-gray-500">Last poll outcome</dt>
-              <dd>
-                <span
-                  className={`text-xs px-2 py-0.5 rounded-full ${
-                    OUTCOME_BADGES[outcome] ?? 'bg-gray-100 text-gray-500'
-                  }`}
-                >
-                  {outcome}
-                </span>
-              </dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-gray-500">Last polled</dt>
-              <dd className="text-gray-700">
-                {timeAgo(state?.lastPolledAt ?? null)}
-                {state?.lastPolledAt && (
-                  <span className="text-xs text-gray-400 ml-2">
-                    ({formatTime(state.lastPolledAt)})
-                  </span>
-                )}
-              </dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-gray-500">Page token</dt>
-              <dd className="text-gray-700 text-xs font-mono">
-                {state?.pageToken
-                  ? `${state.pageToken.slice(0, 12)}…`
-                  : <span className="text-amber-700">not set</span>}
-              </dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-gray-500">Scheduler state</dt>
-              <dd className="text-gray-700">
-                {scheduler.job ? scheduler.job.state : <span className="text-red-600">unreachable</span>}
-              </dd>
-            </div>
-          </dl>
-        </div>
-
-        {/* Cadence panel */}
-        <div className="bg-white border border-gray-200 rounded-lg px-5 py-4">
-          <h2 className="text-sm font-semibold text-gray-700 mb-3">Cadence</h2>
-          {scheduler.error ? (
-            <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 space-y-1">
-              <div className="font-medium">Cloud Scheduler API error</div>
-              <div>{scheduler.error}</div>
-              <div className="text-red-600">
-                Check that the gub-admin runtime SA has{' '}
-                <code className="bg-red-100 px-1 rounded">gubAdminDriveSchedulerEditor</code>{' '}
-                granted (terraform/drive_poll.tf).
-              </div>
-            </div>
-          ) : scheduler.job ? (
-            <CadenceEditor
-              current={scheduler.matchedPreset}
-              liveSchedule={scheduler.job.schedule}
-              liveTimeZone={scheduler.job.timeZone}
-            />
-          ) : null}
-        </div>
-      </div>
-
-      {/* Run history */}
-      <div>
+      {/* Per-account backfill rows */}
+      <div className="mb-8">
         <h2 className="text-sm font-semibold text-gray-700 mb-3">
-          Run History ({runs.length})
+          Accounts ({accounts.length})
         </h2>
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Time</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-600">Scanned</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-600">Created</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-600">Updated</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-600">Errors</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-600">Duration</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Account</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Drive folder ID</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Last backfill</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Cursor</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-600">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {runs.length === 0 && (
+              {accounts.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
-                    No sync runs yet
+                  <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
+                    No accounts yet. Create one in the Account management section.
                   </td>
                 </tr>
               )}
-              {runs.map((run) => (
-                <tr key={run.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    <Link
-                      href={`/data-sources/${SOURCE_KEY}/runs/${run.id}`}
-                      className="text-blue-600 hover:underline"
-                    >
-                      {formatTime(run.startedAt)}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-full ${
-                        run.status === 'success'
-                          ? 'bg-green-100 text-green-700'
-                          : run.status === 'failed'
-                            ? 'bg-red-100 text-red-700'
-                            : run.status === 'paused'
-                              ? 'bg-blue-100 text-blue-700'
-                              : 'bg-amber-100 text-amber-700'
-                      }`}
-                    >
-                      {run.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right text-gray-700 tabular-nums">{run.totalScanned}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {run.created > 0 ? (
-                      <span className="text-green-700 font-medium">+{run.created}</span>
-                    ) : (
-                      <span className="text-gray-400">0</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {run.updated > 0 ? (
-                      <span className="text-blue-700 font-medium">{run.updated}</span>
-                    ) : (
-                      <span className="text-gray-400">0</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {run.errored > 0 ? (
-                      <span className="text-red-600 font-medium">{run.errored}</span>
-                    ) : (
-                      <span className="text-gray-400">0</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right text-gray-500">
-                    <RunDuration
-                      startedAt={run.startedAt.toISOString()}
-                      durationMs={run.durationMs}
-                      status={run.status}
-                    />
+              {accounts.map((acct) => (
+                <AccountBackfillRow
+                  key={acct.id}
+                  accountId={acct.id}
+                  name={acct.name}
+                  driveFolderId={acct.driveFolderId}
+                  lastBackfill={
+                    acct.driveLastScannedAt
+                      ? { ago: timeAgo(acct.driveLastScannedAt), abs: formatTime(acct.driveLastScannedAt) }
+                      : null
+                  }
+                  cursor={formatCursorYmd(acct.driveBackfillCursor)}
+                  mode={backfillMode(acct.driveBackfillCursor)}
+                  liveStatus={livePerAccount.get(acct.id) ?? null}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Recent backfill requests */}
+      <div>
+        <h2 className="text-sm font-semibold text-gray-700 mb-3">
+          Recent backfill requests ({recentRequests.length})
+        </h2>
+        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Requested</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Account</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-600">Scans</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">By</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Summary</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {recentRequests.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                    No backfill requests yet. Click a row&apos;s <strong>Backfill</strong> button to queue one.
                   </td>
                 </tr>
-              ))}
+              )}
+              {recentRequests.map((req) => {
+                const summaryLine = req.errorMessage
+                  ? req.errorMessage
+                  : (req.logSummary?.split('\n').filter(Boolean).pop() ?? '');
+                const truncatedSummary =
+                  summaryLine.length > 80 ? summaryLine.slice(0, 80) + '…' : summaryLine;
+                return (
+                  <tr key={req.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
+                      {timeAgo(req.requestedAt)}
+                    </td>
+                    <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{req.account.name}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full ${
+                          STATUS_BADGES[req.status] ?? 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {req.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums text-gray-700">
+                      {req.scansDone}/{req.scans}
+                    </td>
+                    <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
+                      {req.requestedByStaff?.fullName ?? req.requestedByStaff?.email ?? '—'}
+                    </td>
+                    <td
+                      className={`px-4 py-3 text-xs font-mono whitespace-nowrap ${
+                        req.errorMessage ? 'text-red-700' : 'text-gray-500'
+                      }`}
+                      title={req.errorMessage ?? req.logSummary ?? ''}
+                    >
+                      {truncatedSummary || '—'}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -74,7 +74,9 @@ steps:
       # Sync button fire the gub-research-worker Cloud Run Job via the
       # Admin API (src/lib/research/trigger-job.ts). Non-fatal if absent —
       # enqueue still works, the drain just waits for the next trigger.
-      - --set-env-vars=NODE_ENV=production,GCP_PROJECT_ID=$PROJECT_ID,GCP_REGION=$_REGION,RESEARCH_JOB_NAME=gub-research-worker-dev,GUB_BACKEND_URL=$_GUB_BACKEND_URL
+      # DRIVE_SYNC_JOB_NAME lets the google_drive Sync button fire the
+      # gub-drive-sync Cloud Run Job (src/lib/drive-sync/trigger-job.ts).
+      - --set-env-vars=NODE_ENV=production,GCP_PROJECT_ID=$PROJECT_ID,GCP_REGION=$_REGION,RESEARCH_JOB_NAME=gub-research-worker-dev,DRIVE_SYNC_JOB_NAME=gub-drive-sync-dev,GUB_BACKEND_URL=$_GUB_BACKEND_URL
       - --set-secrets=DATABASE_URL=$_DB_SECRET:latest
       - --add-cloudsql-instances=$PROJECT_ID:$_REGION:$_CLOUDSQL_INSTANCE
     waitFor: [push]

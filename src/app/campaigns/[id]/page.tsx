@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import CampaignForm from '../CampaignForm';
+import StatusMarkdownPanel from '../../StatusMarkdownPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +30,11 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
       </div>
 
       <CampaignForm campaign={campaign} accounts={accounts} staff={staff} />
+
+      <StatusMarkdownPanel
+        markdown={campaign.statusMarkdown}
+        sensitiveMarkdown={campaign.statusSensitiveMarkdown}
+      />
     </div>
   );
 }
