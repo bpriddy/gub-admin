@@ -39,6 +39,18 @@ import { triggerDriveSyncJob, TriggerJobError } from '@/lib/drive-sync/trigger-j
 const BodySchema = z.object({
   accountId: z.string().uuid(),
   scans: z.number().int().min(1).max(50).default(1),
+  /**
+   * When true the engine processes until cursor reaches today instead
+   * of stopping after `scans` days. Wall-clock budget per Job execution
+   * chunks the work across multiple executions via Admin API self-
+   * trigger (see backfill-queue.ts scheduleContinuation). One click,
+   * however-many-chunks-it-takes.
+   *
+   * The UI sets this true when the operator's button mode is
+   * 'backfill' (cursor far behind / no cursor yet), false when 'sync'
+   * (cursor near today — one scan is the right grain).
+   */
+  allRemaining: z.boolean().default(false),
 });
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
@@ -91,6 +103,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     data: {
       accountId: body.accountId,
       scans: body.scans,
+      allRemaining: body.allRemaining,
       requestedBy: actor.actorId,
     },
     select: { id: true, status: true },

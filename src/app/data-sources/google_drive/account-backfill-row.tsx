@@ -100,10 +100,19 @@ export function AccountBackfillRow({
     setTriggerState('triggering');
     setTriggerError(null);
     try {
+      // Mode determines scope:
+      //   sync     → scans=1, allRemaining=false (cursor near today)
+      //   backfill → allRemaining=true (cursor far behind; engine walks
+      //              until cursor reaches today, chunked across Job
+      //              executions via Admin API self-trigger)
       const res = await fetch('/api/data-sources/google_drive/backfill', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accountId, scans: 1 }),
+        body: JSON.stringify({
+          accountId,
+          scans: 1,
+          allRemaining: mode === 'backfill',
+        }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -241,8 +250,8 @@ export function AccountBackfillRow({
               : liveStatus
                 ? `A ${liveStatus} request already exists for this account`
                 : mode === 'sync'
-                  ? 'Queue a 1-day sync'
-                  : 'Queue a 1-day backfill'
+                  ? 'Queue a 1-day sync (cursor is within a week of today)'
+                  : 'Queue a catch-up backfill — engine walks until cursor reaches today, chunked across Job executions automatically'
           }
         >
           {triggerState === 'triggering'
