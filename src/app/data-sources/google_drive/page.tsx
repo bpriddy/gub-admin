@@ -247,6 +247,7 @@ export default async function DriveBackfillPage() {
               <col className="w-40" /> {/* Account   */}
               <col className="w-24" /> {/* Status    */}
               <col className="w-20" /> {/* Scans     */}
+              <col className="w-20" /> {/* Files     */}
               <col className="w-32" /> {/* By        */}
               <col />                  {/* Summary — fills remainder */}
               <col className="w-12" /> {/* Action ✕  */}
@@ -257,6 +258,12 @@ export default async function DriveBackfillPage() {
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Account</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Scans</th>
+                <th
+                  className="text-right px-4 py-3 font-medium text-gray-600"
+                  title="Total files examined across all scan days processed in this chunk."
+                >
+                  Files
+                </th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">By</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Summary</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600"></th>
@@ -265,7 +272,7 @@ export default async function DriveBackfillPage() {
             <tbody className="divide-y divide-gray-100">
               {recentRequests.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
                     No backfill requests yet. Click a row&apos;s <strong>Backfill</strong> button to queue one.
                   </td>
                 </tr>
@@ -283,6 +290,7 @@ export default async function DriveBackfillPage() {
                     ago={timeAgo(req.requestedAt)}
                     scansDone={req.scansDone}
                     scans={req.scans}
+                    filesProcessed={req.filesProcessed}
                     requestedBy={
                       req.requestedByStaff?.fullName ?? req.requestedByStaff?.email ?? '—'
                     }

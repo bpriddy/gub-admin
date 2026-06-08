@@ -10,6 +10,7 @@ interface RequestRowProps {
   ago: string;
   scansDone: number;
   scans: number;
+  filesProcessed: number;
   requestedBy: string;
   summary: string;
   hasError: boolean;
@@ -39,6 +40,7 @@ export function RequestRow({
   ago,
   scansDone,
   scans,
+  filesProcessed,
   requestedBy,
   summary,
   hasError,
@@ -96,6 +98,9 @@ export function RequestRow({
       </td>
       <td className="px-4 py-3 text-right tabular-nums text-gray-700">
         {scansDone}/{scans}
+      </td>
+      <td className="px-4 py-3 text-right tabular-nums text-gray-700">
+        {filesProcessed.toLocaleString()}
       </td>
       <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{requestedBy}</td>
       <td
