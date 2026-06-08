@@ -6,17 +6,27 @@
  * row stays in history for audit ("queued, then cancelled" is a real
  * event worth surfacing).
  *
- * Only PENDING rows are cancellable. Running rows are not — the Cloud
- * Run Job execution is actively working and cancelling at the DB layer
- * would orphan it. Stuck running rows are handled by the watcher's
- * 60-min stale-recovery on next invocation (reclaimStaleRunning marks
- * them failed and re-queues nothing — it's terminal).
+ * Cancellable: PENDING or RUNNING rows. Terminal rows (completed,
+ * failed) return 409.
+ *
+ * Originally only allowed cancelling pending. Extended to running after
+ * a real-world case where a Cloud Run Job execution died mid-run (e.g.,
+ * task timeout, SIGKILL) without updating the row — left the row stuck
+ * in `running` forever, blocking the per-account live-request guard.
+ * Stale-recovery (60min) eventually catches it on the next Job
+ * invocation, but operator needs immediate UI recovery.
+ *
+ * Small race accepted: if the cancel lands while the Job IS still
+ * working on this row, the Job's eventual update-to-completed could
+ * overwrite the cancel. In practice this is rare (cancel intent
+ * usually signals "this is hung") and harmless (cursor preserved
+ * either way; operator just cancels again if needed).
  *
  * Response:
  *   200 — cancelled, returns updated row
  *   403 — actor not in staff
  *   404 — row doesn't exist
- *   409 — row is not in pending state (running, completed, failed)
+ *   409 — row is terminal (completed, failed)
  */
 
 import { NextResponse, type NextRequest } from 'next/server';
@@ -38,7 +48,7 @@ export async function DELETE(
   if (!existing) {
     return NextResponse.json({ error: 'Request not found' }, { status: 404 });
   }
-  if (existing.status !== 'pending') {
+  if (existing.status !== 'pending' && existing.status !== 'running') {
     return NextResponse.json(
       {
         error: `Cannot cancel a ${existing.status} request`,
@@ -47,6 +57,7 @@ export async function DELETE(
       { status: 409 },
     );
   }
+  const wasRunning = existing.status === 'running';
 
   // Capture the operator's email for the error_message so the audit
   // trail shows WHO cancelled. The staff lookup at the top gives us
@@ -58,7 +69,9 @@ export async function DELETE(
     data: {
       status: 'failed',
       completedAt: new Date(),
-      errorMessage: `cancelled by ${email}`,
+      errorMessage: wasRunning
+        ? `cancelled by ${email} (was running — Cloud Run Job execution may still be in flight)`
+        : `cancelled by ${email}`,
       // Clear next_attempt_at so any retry-eligible flag is reset
       // (defensive — pending rows shouldn't have one set, but be sure).
       nextAttemptAt: null,

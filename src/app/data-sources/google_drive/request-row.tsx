@@ -50,7 +50,14 @@ export function RequestRow({
   const truncated = summary.length > 80 ? summary.slice(0, 80) + '…' : summary;
 
   async function handleCancel() {
-    if (!confirm(`Cancel this pending backfill for "${accountName}"?`)) return;
+    const isRunning = status === 'running';
+    const promptText = isRunning
+      ? `This backfill for "${accountName}" is currently RUNNING — a Cloud Run Job ` +
+        `may be processing it right now. Force-cancel and mark it failed? ` +
+        `(The Job execution itself isn't stopped — but the row's status changes ` +
+        `so a new backfill click can be queued.)`
+      : `Cancel this pending backfill for "${accountName}"?`;
+    if (!confirm(promptText)) return;
     setCancelState('cancelling');
     setCancelError(null);
     try {
@@ -98,7 +105,7 @@ export function RequestRow({
         {truncated || '—'}
       </td>
       <td className="px-4 py-3 text-right whitespace-nowrap">
-        {status === 'pending' ? (
+        {status === 'pending' || status === 'running' ? (
           <button
             onClick={handleCancel}
             disabled={cancelState === 'cancelling'}
@@ -107,11 +114,15 @@ export function RequestRow({
                 ? 'bg-red-100 text-red-700'
                 : cancelState === 'cancelling'
                   ? 'bg-amber-100 text-amber-700 cursor-wait'
-                  : 'text-gray-400 hover:bg-red-50 hover:text-red-700'
+                  : status === 'running'
+                    ? 'text-amber-500 hover:bg-red-50 hover:text-red-700'
+                    : 'text-gray-400 hover:bg-red-50 hover:text-red-700'
             }`}
             title={
               cancelError ??
-              'Cancel this pending request (marks it failed; preserves audit row).'
+              (status === 'running'
+                ? 'Force-cancel this running request. Marks it failed so a new backfill can be queued; the Cloud Run Job execution itself is not killed (it just becomes orphaned if it was still working).'
+                : 'Cancel this pending request (marks it failed; preserves audit row).')
             }
           >
             {cancelState === 'cancelling' ? '…' : cancelState === 'error' ? '✕ fail' : '✕'}
