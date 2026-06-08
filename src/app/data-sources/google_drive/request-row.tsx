@@ -47,7 +47,9 @@ export function RequestRow({
   const [cancelState, setCancelState] = useState<'idle' | 'cancelling' | 'error'>('idle');
   const [cancelError, setCancelError] = useState<string | null>(null);
 
-  const truncated = summary.length > 80 ? summary.slice(0, 80) + '…' : summary;
+  // Summary is CSS-truncated at column width (see <colgroup> in page.tsx);
+  // full text shows on hover via the title attr. No JS slice needed —
+  // doing it here would lie about hover content.
 
   async function handleCancel() {
     const isRunning = status === 'running';
@@ -97,12 +99,12 @@ export function RequestRow({
       </td>
       <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{requestedBy}</td>
       <td
-        className={`px-4 py-3 text-xs font-mono whitespace-nowrap ${
+        className={`px-4 py-3 text-xs font-mono truncate ${
           hasError ? 'text-red-700' : 'text-gray-500'
         }`}
         title={summary || ''}
       >
-        {truncated || '—'}
+        {summary || '—'}
       </td>
       <td className="px-4 py-3 text-right whitespace-nowrap">
         {status === 'pending' || status === 'running' ? (

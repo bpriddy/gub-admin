@@ -236,11 +236,21 @@ export default async function DriveBackfillPage() {
         <h2 className="text-sm font-semibold text-gray-700 mb-3">
           Recent backfill requests ({recentRequests.length})
         </h2>
-        {/* overflow-x-auto so the action column (rightmost) doesn't get
-            clipped when the Summary column's text is long. Otherwise the
-            cancel ✕ button can disappear off-screen entirely. */}
-        <div className="bg-white border border-gray-200 rounded-lg overflow-x-auto">
-          <table className="w-full text-sm">
+        {/* table-fixed + <colgroup> pins each column's width. Summary takes
+            the leftover and CSS-truncates inside the row component, so a
+            long error string can never push the rightmost action column
+            (with cancel ✕) off-screen. */}
+        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <table className="w-full text-sm table-fixed">
+            <colgroup>
+              <col className="w-32" /> {/* Requested */}
+              <col className="w-40" /> {/* Account   */}
+              <col className="w-24" /> {/* Status    */}
+              <col className="w-20" /> {/* Scans     */}
+              <col className="w-32" /> {/* By        */}
+              <col />                  {/* Summary — fills remainder */}
+              <col className="w-12" /> {/* Action ✕  */}
+            </colgroup>
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Requested</th>
