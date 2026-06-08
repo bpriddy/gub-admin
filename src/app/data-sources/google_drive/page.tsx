@@ -236,7 +236,10 @@ export default async function DriveBackfillPage() {
         <h2 className="text-sm font-semibold text-gray-700 mb-3">
           Recent backfill requests ({recentRequests.length})
         </h2>
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        {/* overflow-x-auto so the action column (rightmost) doesn't get
+            clipped when the Summary column's text is long. Otherwise the
+            cancel ✕ button can disappear off-screen entirely. */}
+        <div className="bg-white border border-gray-200 rounded-lg overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
