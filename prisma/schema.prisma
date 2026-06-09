@@ -261,12 +261,16 @@ model DriveBackfillRequest {
   allRemaining  Boolean   @default(false) @map("all_remaining")
   /// Total files examined across all scan days in this chunk.
   filesProcessed Int      @default(0) @map("files_processed")
+  /// Liveness pulse for crash recovery; engine updates every 5 min.
+  /// Stale (>15 min old) → reclaimed back to pending on next Job start.
+  lastHeartbeatAt DateTime? @map("last_heartbeat_at") @db.Timestamptz
 
   account     Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
   requestedByStaff Staff @relation("DriveBackfillRequestedBy", fields: [requestedBy], references: [id])
 
   @@index([status, nextAttemptAt, requestedAt], map: "drive_backfill_requests_pickup_idx")
   @@index([accountId, requestedAt(sort: Desc)], map: "drive_backfill_requests_history_idx")
+  @@index([status, lastHeartbeatAt], map: "drive_backfill_requests_heartbeat_idx")
   @@map("drive_backfill_requests")
 }
 
