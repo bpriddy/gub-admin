@@ -224,6 +224,10 @@ model Account {
   driveBootstrapCursor DateTime? @map("drive_bootstrap_cursor") @db.Date
   /// Set ONCE when bootstrap catches the cursor up to today.
   driveBootstrapCompletedAt DateTime? @map("drive_bootstrap_completed_at") @db.Timestamptz
+  /// Cached drive structure (mirrored — gub-admin doesn't read it today).
+  driveStructureClassification Json? @map("drive_structure_classification")
+  /// Cached bootstrap file list (mirrored — gub-admin doesn't read it).
+  driveBootstrapFiles Json? @map("drive_bootstrap_files")
   /// Latest completed forward sync wall-clock.
   driveLastSyncedAt  DateTime? @map("drive_last_synced_at") @db.Timestamptz
   /// Activity API pageToken for the next forward run. NULL before first
