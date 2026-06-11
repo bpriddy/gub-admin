@@ -98,17 +98,17 @@ export default async function DriveBackfillPage() {
         id: true,
         name: true,
         driveFolderId: true,
-        driveLastScannedAt: true,
-        driveBackfillCursor: true,
+        driveLastRunAt: true,
+        driveBootstrapCursor: true,
       },
       orderBy: { name: 'asc' },
     }),
-    prisma.driveBackfillRequest.findMany({
+    prisma.driveSyncRun.findMany({
       where: { status: { in: ['pending', 'running'] } },
       select: { accountId: true, status: true, requestedAt: true },
       orderBy: { requestedAt: 'desc' },
     }),
-    prisma.driveBackfillRequest.findMany({
+    prisma.driveSyncRun.findMany({
       take: 10,
       orderBy: { requestedAt: 'desc' },
       include: {
@@ -217,12 +217,12 @@ export default async function DriveBackfillPage() {
                   name={acct.name}
                   driveFolderId={acct.driveFolderId}
                   lastBackfill={
-                    acct.driveLastScannedAt
-                      ? { ago: timeAgo(acct.driveLastScannedAt), abs: formatTime(acct.driveLastScannedAt) }
+                    acct.driveLastRunAt
+                      ? { ago: timeAgo(acct.driveLastRunAt), abs: formatTime(acct.driveLastRunAt) }
                       : null
                   }
-                  cursor={formatCursorYmd(acct.driveBackfillCursor)}
-                  mode={backfillMode(acct.driveBackfillCursor)}
+                  cursor={formatCursorYmd(acct.driveBootstrapCursor)}
+                  mode={backfillMode(acct.driveBootstrapCursor)}
                   liveStatus={livePerAccount.get(acct.id) ?? null}
                 />
               ))}
@@ -246,7 +246,7 @@ export default async function DriveBackfillPage() {
               <col className="w-32" /> {/* Requested */}
               <col className="w-40" /> {/* Account   */}
               <col className="w-24" /> {/* Status    */}
-              <col className="w-20" /> {/* Scans     */}
+              <col className="w-24" /> {/* Mode      */}
               <col className="w-20" /> {/* Files     */}
               <col className="w-32" /> {/* By        */}
               <col />                  {/* Summary — fills remainder */}
@@ -257,7 +257,7 @@ export default async function DriveBackfillPage() {
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Requested</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Account</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-600">Scans</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Mode</th>
                 <th
                   className="text-right px-4 py-3 font-medium text-gray-600"
                   title="Total files examined across all scan days processed in this chunk."
@@ -286,10 +286,9 @@ export default async function DriveBackfillPage() {
                     key={req.id}
                     id={req.id}
                     status={req.status}
+                    mode={req.mode}
                     accountName={req.account.name}
                     ago={timeAgo(req.requestedAt)}
-                    scansDone={req.scansDone}
-                    scans={req.scans}
                     filesProcessed={req.filesProcessed}
                     requestedBy={
                       req.requestedByStaff?.fullName ?? req.requestedByStaff?.email ?? '—'

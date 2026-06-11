@@ -64,6 +64,12 @@ const BOT_SCOPES: Record<BotName, readonly string[]> = {
     'https://www.googleapis.com/auth/documents.readonly',
     'https://www.googleapis.com/auth/presentations.readonly',
     'https://www.googleapis.com/auth/spreadsheets.readonly',
+    // Drive Activity API — read events (CREATE / EDIT / MOVE / DELETE /
+    // COMMENT / etc.) on items the bot can see. Required for the
+    // historical-replay backfill model: lets us ask "what changed in
+    // this drive on day D" without walking every file's revisions list.
+    // Mirror this scope in gub-bot-oauth/src/bots.ts.
+    'https://www.googleapis.com/auth/drive.activity.readonly',
     USERINFO_EMAIL,
   ],
   groups: [

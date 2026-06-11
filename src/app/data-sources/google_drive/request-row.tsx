@@ -6,10 +6,9 @@ import { useRouter } from 'next/navigation';
 interface RequestRowProps {
   id: string;
   status: string;
+  mode: string;
   accountName: string;
   ago: string;
-  scansDone: number;
-  scans: number;
   filesProcessed: number;
   requestedBy: string;
   summary: string;
@@ -36,10 +35,9 @@ const STATUS_BADGES: Record<string, string> = {
 export function RequestRow({
   id,
   status,
+  mode,
   accountName,
   ago,
-  scansDone,
-  scans,
   filesProcessed,
   requestedBy,
   summary,
@@ -96,8 +94,8 @@ export function RequestRow({
           {status}
         </span>
       </td>
-      <td className="px-4 py-3 text-right tabular-nums text-gray-700">
-        {scansDone}/{scans}
+      <td className="px-4 py-3 text-xs text-gray-500">
+        <span className="font-mono">{mode}</span>
       </td>
       <td className="px-4 py-3 text-right tabular-nums text-gray-700">
         {filesProcessed.toLocaleString()}

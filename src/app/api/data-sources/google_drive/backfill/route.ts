@@ -82,7 +82,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const live = await prisma.driveBackfillRequest.findFirst({
+  const live = await prisma.driveSyncRun.findFirst({
     where: {
       accountId: body.accountId,
       status: { in: ['pending', 'running'] },
@@ -99,10 +99,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const created = await prisma.driveBackfillRequest.create({
+  const created = await prisma.driveSyncRun.create({
     data: {
       accountId: body.accountId,
-      scans: body.scans,
+      mode: 'bootstrap',
       allRemaining: body.allRemaining,
       requestedBy: actor.actorId,
     },

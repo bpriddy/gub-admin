@@ -41,7 +41,7 @@ export async function DELETE(
   const actor = await requireActor();
   if ('response' in actor) return actor.response;
 
-  const existing = await prisma.driveBackfillRequest.findUnique({
+  const existing = await prisma.driveSyncRun.findUnique({
     where: { id: params.id },
     select: { id: true, status: true },
   });
@@ -64,7 +64,7 @@ export async function DELETE(
   // the actor id; this gives the human-readable identity.
   const { email } = getIAPIdentity();
 
-  const cancelled = await prisma.driveBackfillRequest.update({
+  const cancelled = await prisma.driveSyncRun.update({
     where: { id: params.id },
     data: {
       status: 'failed',

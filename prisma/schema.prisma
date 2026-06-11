@@ -218,11 +218,11 @@ model Account {
   /// Root Drive folder owned by this account. Set from the Data Sources
   /// page; consumed by gub-drive-sync's backfill engine.
   driveFolderId  String?  @map("drive_folder_id")
-  /// Wall-clock of the latest drive-sync run touching this account
-  /// (bootstrap or forward). Renamed from drive_last_scanned_at in v2.
+  /// Wall-clock of the latest drive-sync run touching this account.
   driveLastRunAt     DateTime? @map("drive_last_run_at") @db.Timestamptz
-  /// When the one-time bootstrap finished walking the drive. NULL =
-  /// pending or in progress; UI shows "Bootstrap" button.
+  /// Latest completed modifiedTime day in the bootstrap walk.
+  driveBootstrapCursor DateTime? @map("drive_bootstrap_cursor") @db.Date
+  /// Set ONCE when bootstrap catches the cursor up to today.
   driveBootstrapCompletedAt DateTime? @map("drive_bootstrap_completed_at") @db.Timestamptz
   /// Latest completed forward sync wall-clock.
   driveLastSyncedAt  DateTime? @map("drive_last_synced_at") @db.Timestamptz
@@ -265,8 +265,6 @@ model DriveSyncRun {
   filesProcessed Int      @default(0) @map("files_processed")
   /// Liveness pulse. Stale (>15 min) → reclaimed on next Job startup.
   lastHeartbeatAt DateTime? @map("last_heartbeat_at") @db.Timestamptz
-  /// Bootstrap only: file-list pagination token at chunk end.
-  bootstrapCursor String? @map("bootstrap_cursor")
   /// Forward only: Activity API pageToken handed to this chunk.
   activityPageTokenIn  String? @map("activity_page_token_in")
   /// Forward only: Activity API pageToken at chunk end.
