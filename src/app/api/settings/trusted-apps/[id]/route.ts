@@ -12,7 +12,6 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { requireActor } from '@/lib/actor';
 import { validateTrustedApp } from '@/lib/trusted-app-validation';
-import { findCollidingActiveApp } from '@/lib/trusted-app-collision';
 
 const PatchSchema = z
   .object({
@@ -82,23 +81,10 @@ export async function PATCH(
     }
     normalizedShape = validation.normalized;
 
-    // Collision against OTHER rows. Excluding this row's own id so we
-    // don't false-positive on the unchanged identifiers.
-    const collision = await findCollidingActiveApp({
-      origins: normalizedShape.origins,
-      googleClientIds: normalizedShape.googleClientIds,
-      excludeId: existing.id,
-    });
-    if (collision) {
-      return NextResponse.json(
-        {
-          error: 'IDENTIFIER_ALREADY_REGISTERED',
-          existing: { id: collision.id, name: collision.name },
-          conflict: collision.conflict,
-        },
-        { status: 409 },
-      );
-    }
+    // No cross-row uniqueness guard — reuse of an origin or client_id across
+    // rows is allowed. The backend pairs by existence (any active row where
+    // origin + client_id co-exist), so duplicates are harmless. See the
+    // create route for the full rationale.
   }
 
   const updates: {

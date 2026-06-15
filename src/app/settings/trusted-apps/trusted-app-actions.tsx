@@ -38,16 +38,9 @@ export function TrustedAppActions({
       const data = (await res.json().catch(() => ({}))) as {
         error?: unknown;
         reason?: unknown;
-        existing?: { id: string; name: string };
-        conflict?: { kind: string; value: string };
       };
       if (data.error === 'INVALID_TRUSTED_APP' && typeof data.reason === 'string') {
         throw new Error(data.reason);
-      }
-      if (data.error === 'IDENTIFIER_ALREADY_REGISTERED' && data.existing && data.conflict) {
-        throw new Error(
-          `'${data.conflict.value}' is already registered on the trusted app "${data.existing.name}".`,
-        );
       }
       throw new Error(typeof data.error === 'string' ? data.error : `HTTP ${res.status}`);
     }

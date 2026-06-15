@@ -40,16 +40,9 @@ export function AddTrustedAppForm() {
         const body = (await res.json().catch(() => ({}))) as {
           error?: unknown;
           reason?: unknown;
-          existing?: { id: string; name: string };
-          conflict?: { kind: string; value: string };
         };
         if (body.error === 'INVALID_TRUSTED_APP' && typeof body.reason === 'string') {
           setError(body.reason);
-        } else if (body.error === 'IDENTIFIER_ALREADY_REGISTERED' && body.existing && body.conflict) {
-          setError(
-            `'${body.conflict.value}' is already registered on the trusted app "${body.existing.name}". ` +
-              'Edit that app to extend it, or use a different identifier.',
-          );
         } else {
           setError(
             `HTTP ${res.status} — ${

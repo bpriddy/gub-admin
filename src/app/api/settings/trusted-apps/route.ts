@@ -11,7 +11,6 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { requireActor } from '@/lib/actor';
 import { validateTrustedApp } from '@/lib/trusted-app-validation';
-import { findCollidingActiveApp } from '@/lib/trusted-app-collision';
 
 export async function GET() {
   const rows = await prisma.trustedApp.findMany({
@@ -72,23 +71,12 @@ export async function POST(request: Request) {
     );
   }
 
-  // Cross-row uniqueness guard: same origin/client_id on multiple rows
-  // would break the strict-pairing semantics. Surface the collision.
-  const collision = await findCollidingActiveApp({
-    origins: validation.normalized.origins,
-    googleClientIds: validation.normalized.googleClientIds,
-  });
-  if (collision) {
-    return NextResponse.json(
-      {
-        error: 'IDENTIFIER_ALREADY_REGISTERED',
-        existing: { id: collision.id, name: collision.name },
-        conflict: collision.conflict,
-      },
-      { status: 409 },
-    );
-  }
-
+  // No cross-row uniqueness guard. The backend's pairing check
+  // (isAudienceOriginPaired) is an existence query — "is there ANY active
+  // row where this origin and this client_id co-exist" — so the same origin
+  // or client_id appearing on multiple rows is harmless. Reuse is allowed
+  // deliberately: registering a trusted app already requires gub-admin
+  // access (IAP, a handful of admins), which is the real trust boundary.
   const created = await prisma.$transaction(async (tx) => {
     const row = await tx.trustedApp.create({
       data: {
