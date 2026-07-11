@@ -316,6 +316,9 @@ model Campaign {
   awardedAt DateTime? @map("awarded_at") @db.Date
   liveAt    DateTime? @map("live_at") @db.Date
   endsAt    DateTime? @map("ends_at") @db.Date
+  /// Drive folder that roots this campaign. Used to resolve an Idea's
+  /// campaign_external_id (a folder id) back to the campaign for display.
+  driveFolderId String? @map("drive_folder_id")
   /// Canonical human-readable snapshot of the campaign. Same shape as
   /// Account.statusMarkdown. Written by the Drive sync pipeline.
   statusMarkdown String? @map("status_markdown") @db.Text

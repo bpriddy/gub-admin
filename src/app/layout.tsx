@@ -26,6 +26,7 @@ const navLinks = [
   { href: '/teams', label: 'Teams' },
   { href: '/accounts', label: 'Accounts' },
   { href: '/campaigns', label: 'Campaigns' },
+  { href: '/ideas', label: 'Ideas' },
   { href: '/grants', label: 'Access Grants' },
   { href: '/access-requests', label: 'Access Requests' },
   { href: '/resourcing', label: 'Resourcing' },
