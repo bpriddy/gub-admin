@@ -7,17 +7,25 @@ export const dynamic = 'force-dynamic';
 // campaign by EXTERNAL id (a Drive folder id), not by FK. So we resolve names
 // in code by matching account/campaign driveFolderId → the idea's external ids.
 export default async function IdeasPage() {
-  const [ideas, accounts, campaigns] = await Promise.all([
+  const [ideas, accounts, campaigns, pieces] = await Promise.all([
     prisma.idea.findMany({
       orderBy: { createdAt: 'desc' },
       include: { _count: { select: { changes: true } } },
     }),
     prisma.account.findMany({ select: { name: true, driveFolderId: true } }),
     prisma.campaign.findMany({ select: { name: true, driveFolderId: true } }),
+    prisma.campaignPiece.findMany({ select: { driveFolderId: true, campaign: { select: { name: true } } } }),
   ]);
 
   const accountByFolder = new Map(accounts.filter((a) => a.driveFolderId).map((a) => [a.driveFolderId!, a.name]));
   const campaignByFolder = new Map(campaigns.filter((c) => c.driveFolderId).map((c) => [c.driveFolderId!, c.name]));
+  // A piece's folder also resolves to its OWNING campaign — ideas extracted
+  // from files in a piece folder reference that folder as campaign scope.
+  for (const p of pieces) {
+    if (p.driveFolderId && !campaignByFolder.has(p.driveFolderId)) {
+      campaignByFolder.set(p.driveFolderId, p.campaign.name);
+    }
+  }
 
   return (
     <div>

@@ -23,7 +23,19 @@ export default async function IdeaDetailPage({ params }: { params: { id: string 
   const [account, campaign] = await Promise.all([
     prisma.account.findFirst({ where: { driveFolderId: idea.accountExternalId }, select: { id: true, name: true } }),
     idea.campaignExternalId
-      ? prisma.campaign.findFirst({ where: { driveFolderId: idea.campaignExternalId }, select: { id: true, name: true } })
+      ? prisma.campaign
+          .findFirst({ where: { driveFolderId: idea.campaignExternalId }, select: { id: true, name: true } })
+          .then(
+            (c) =>
+              c ??
+              // Piece folders resolve to the owning campaign.
+              prisma.campaignPiece
+                .findFirst({
+                  where: { driveFolderId: idea.campaignExternalId! },
+                  select: { campaign: { select: { id: true, name: true } } },
+                })
+                .then((p) => p?.campaign ?? null),
+          )
       : Promise.resolve(null),
   ]);
 
