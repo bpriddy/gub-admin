@@ -51,7 +51,7 @@ export default async function PieceDetailPage({ params }: { params: { id: string
         </dl>
       </section>
 
-      <StatusMarkdownPanel markdown={piece.statusMarkdown} sensitiveMarkdown={null} />
+      <StatusMarkdownPanel markdown={piece.statusMarkdown} sensitiveMarkdown={piece.statusSensitiveMarkdown} />
     </div>
   );
 }
