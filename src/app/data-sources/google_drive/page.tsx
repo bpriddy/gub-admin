@@ -28,6 +28,7 @@ import Link from 'next/link';
 import { AutoRefresh } from '../[key]/auto-refresh';
 import { AccountBackfillRow } from './account-backfill-row';
 import { RequestRow } from './request-row';
+import { RestrictedFileRow } from './restricted-file-row';
 
 export const dynamic = 'force-dynamic';
 
@@ -91,7 +92,7 @@ export default async function DriveBackfillPage() {
   // Pull accounts (ordered alphabetically), live status per account
   // (any pending/running request on that account), and the global recent
   // requests list — all in parallel.
-  const [accounts, liveByAccount, recentRequests] = await Promise.all([
+  const [accounts, liveByAccount, recentRequests, restrictedFiles] = await Promise.all([
     prisma.account.findMany({
       where: { parentId: null }, // top-level accounts only
       select: {
@@ -115,6 +116,17 @@ export default async function DriveBackfillPage() {
         account: { select: { id: true, name: true } },
         requestedByStaff: { select: { fullName: true, email: true } },
       },
+    }),
+    // Restricted-file worklist: files the sync bot can list but not read
+    // (403 on content export). The scan re-probes these every run until a
+    // human fixes sharing (row resolves automatically) or clicks Ignore.
+    prisma.driveRestrictedFile.findMany({
+      where: { status: 'restricted' },
+      include: {
+        account: { select: { name: true } },
+        campaign: { select: { name: true } },
+      },
+      orderBy: { firstSeenAt: 'desc' },
     }),
   ]);
 
@@ -230,6 +242,52 @@ export default async function DriveBackfillPage() {
           </table>
         </div>
       </div>
+
+      {/* Restricted files — worklist of files the sync bot can list but not
+          read (403 on content export; usually shortcuts to unshared
+          personal-drive docs). Fixing sharing in Drive resolves a row
+          automatically on the next scan; Ignore stops the re-probing. */}
+      {restrictedFiles.length > 0 && (
+        <div>
+          <h2 className="text-sm font-semibold text-gray-700 mb-3">
+            Restricted files ({restrictedFiles.length})
+          </h2>
+          <p className="text-xs text-gray-500 mb-3">
+            The sync bot can see these files but cannot read their content. Share each file (or its
+            shortcut target) with the drive bot to unlock it — the next scan picks it up
+            automatically — or Ignore it to stop the scan from re-probing.
+          </p>
+          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">File</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Account</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Campaign</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">First seen</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Last probed</th>
+                  <th className="text-right px-4 py-3 font-medium text-gray-600"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {restrictedFiles.map((f) => (
+                  <RestrictedFileRow
+                    key={f.id}
+                    id={f.id}
+                    fileId={f.fileId}
+                    name={f.name}
+                    path={f.path}
+                    accountName={f.account.name}
+                    campaignName={f.campaign?.name ?? null}
+                    firstSeen={formatTime(f.firstSeenAt)}
+                    lastProbed={timeAgo(f.lastProbedAt)}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Recent backfill requests */}
       <div>

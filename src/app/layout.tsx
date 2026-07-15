@@ -31,6 +31,7 @@ const navLinks = [
   { href: '/access-requests', label: 'Access Requests' },
   { href: '/resourcing', label: 'Resourcing' },
   { href: '/data-sources', label: 'Data Sources' },
+  { href: '/prompt-presets', label: 'Prompts' },
   { href: '/settings', label: 'Settings' },
 ];
 
