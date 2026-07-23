@@ -13,6 +13,7 @@ const ENTITY_TYPES = [
   { value: 'campaign', label: 'Campaign' },
   { value: 'office',   label: 'Office' },
   { value: 'team',     label: 'Team' },
+  { value: 'idea',     label: 'Ideas' },
 ] as const;
 
 const FUNCTIONAL_TYPES = [
@@ -83,6 +84,9 @@ const SCOPE_OPTIONS: { value: EntityScope; label: string; description: string }[
 ];
 
 function resolveResourceType(entityType: EntityTypeName, scope: EntityScope): string {
+  // Ideas are all-or-nothing: the only grant shape is the table-level
+  // `idea_all` cohort (no resourceId). See GUB access.service hasIdeaAccess.
+  if (entityType === 'idea') return 'idea_all';
   if (scope === 'specific') return entityType; // 'account' | 'campaign' | 'office' | 'team'
   if (entityType === 'office') return scope === 'all' ? 'office_all' : 'office_active';
   if (entityType === 'team')   return scope === 'all' ? 'team_all'   : 'team_active';
@@ -110,7 +114,7 @@ export default function NewGrantForm({ users, accounts, campaigns, offices, team
   const resourceType =
     category === 'entity' ? resolveResourceType(entityType, scope) : functionalType;
   const scopeSupported = entityType === 'office' || entityType === 'team';
-  const needsResourceId = category === 'entity' && scope === 'specific';
+  const needsResourceId = category === 'entity' && scope === 'specific' && entityType !== 'idea';
 
   const resourceOptions: Resource[] =
     entityType === 'account'  ? accounts  :
@@ -126,8 +130,8 @@ export default function NewGrantForm({ users, accounts, campaigns, offices, team
   function handleEntityTypeChange(t: EntityTypeName) {
     setEntityType(t);
     // account + campaign don't support cohort scopes; force 'specific' so the
-    // form submits the right resourceType.
-    if (t === 'account' || t === 'campaign') setScope('specific');
+    // form submits the right resourceType. Ideas resolve to idea_all regardless.
+    if (t === 'account' || t === 'campaign' || t === 'idea') setScope('specific');
     setForm((f) => ({ ...f, resourceId: '' }));
   }
 
@@ -222,6 +226,15 @@ export default function NewGrantForm({ users, accounts, campaigns, offices, team
               ))}
             </div>
           </div>
+          {/* Ideas: single all-or-nothing shape, no scope/resource/role inputs */}
+          {entityType === 'idea' && (
+            <p className="text-xs text-gray-400 -mt-2">
+              All-or-nothing: holding this grant reveals the entire ideas memory
+              (every pitched concept, across all accounts). Sends{' '}
+              <code className="text-[10px] bg-gray-100 px-1 rounded">idea_all</code>{' '}
+              with no resource id; role is not used by the gate.
+            </p>
+          )}
           {/* Scope — only applies to offices and teams (cohort grants) */}
           {scopeSupported && (
             <div>
@@ -272,18 +285,20 @@ export default function NewGrantForm({ users, accounts, campaigns, offices, team
               )}
             </div>
           )}
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Role</label>
-            <select
-              value={form.role}
-              onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
-              className="w-full text-sm border border-gray-300 rounded px-2 py-1.5"
-            >
-              {ENTITY_ROLES.map((r) => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
-          </div>
+          {entityType !== 'idea' && (
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Role</label>
+              <select
+                value={form.role}
+                onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
+                className="w-full text-sm border border-gray-300 rounded px-2 py-1.5"
+              >
+                {ENTITY_ROLES.map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </>
       )}
 
