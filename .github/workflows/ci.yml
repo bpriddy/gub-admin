@@ -3,8 +3,8 @@
 # Mirrors the typecheck step in cloudbuild/*.yaml (npm ci && npx tsc --noEmit)
 # and adds `next build` as the real build gate, with the same dummy
 # DATABASE_URL the Dockerfile uses so static generation doesn't need a DB.
-# `npm run lint` (next lint) is intentionally NOT run: eslint is not
-# installed or configured in this repo. See CI-CD.md.
+# ESLint (eslint-config-next) + Prettier are configured but not yet enforced
+# here — add a `npm run lint` step after main's findings are cleaned up.
 
 name: CI
 
