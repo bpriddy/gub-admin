@@ -1,0 +1,46 @@
+# CI — type check + production build.
+#
+# Mirrors the typecheck step in cloudbuild/*.yaml (npm ci && npx tsc --noEmit)
+# and adds `next build` as the real build gate, with the same dummy
+# DATABASE_URL the Dockerfile uses so static generation doesn't need a DB.
+# `npm run lint` (next lint) is intentionally NOT run: eslint is not
+# installed or configured in this repo. See CI-CD.md.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, dev]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build (next build)
+        env:
+          # Same dummy value the Dockerfile bakes in — Next.js static
+          # generation must not touch a real database at build time.
+          DATABASE_URL: postgresql://dummy:dummy@localhost:5432/dummy
+        run: npm run build

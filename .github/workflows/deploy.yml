@@ -1,0 +1,86 @@
+# Deploy — build the image with the repo Dockerfile, push to Artifact
+# Registry, roll the Cloud Run service (IAM-gated: --no-allow-unauthenticated
+# posture is preserved from the existing service config).
+#
+# Auth is Workload Identity Federation (OIDC) — no service-account keys.
+# Required GitHub repository variables: see CI-CD.md.
+#
+# This workflow updates the IMAGE ONLY. Env vars, secrets, scaling, Cloud SQL
+# attachment and the unauthenticated/IAM posture stay whatever the last
+# cloudbuild/<env>.yaml deploy set — those files remain the config source of
+# truth, and first-time provisioning still goes through them.
+#
+# Manual trigger only for now: the existing Cloud Build triggers still fire
+# on branch pushes; enabling a push trigger here too would double-deploy.
+# Once the Cloud Build trigger for a branch is disabled, uncomment `push:`.
+
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment (must already be provisioned via cloudbuild/<env>.yaml)
+        type: choice
+        default: dev
+        options: [dev, staging, prod]
+  # push:
+  #   branches: [dev]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-${{ github.event.inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+env:
+  ENVIRONMENT: ${{ github.event.inputs.environment || 'dev' }}
+  AR_REPO: gub-admin
+  SERVICE: gub-admin-${{ github.event.inputs.environment || 'dev' }}
+  REGION: ${{ vars.GCP_REGION }}
+  PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      # An image-only deploy must never CREATE the service — a bare create
+      # would come up without secrets, runtime SA, or the IAM-gated posture.
+      - name: Verify target environment is provisioned
+        run: |
+          gcloud run services describe "$SERVICE" --region "$REGION" --format='value(metadata.name)' >/dev/null \
+            || { echo "::error::Cloud Run service $SERVICE does not exist in $PROJECT_ID/$REGION. Provision '$ENVIRONMENT' first with cloudbuild/$ENVIRONMENT.yaml."; exit 1; }
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
+
+      - name: Build and push image
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          IMAGE="$REGION-docker.pkg.dev/$PROJECT_ID/$AR_REPO/$SERVICE"
+          docker build -t "$IMAGE:$SHORT_SHA" -t "$IMAGE:latest" .
+          docker push --all-tags "$IMAGE"
+          echo "IMAGE_URI=$IMAGE:$SHORT_SHA" >> "$GITHUB_ENV"
+
+      - name: Deploy Cloud Run service
+        run: gcloud run deploy "$SERVICE" --image "$IMAGE_URI" --region "$REGION" --platform managed
+
+      - name: Report deployed revision
+        run: |
+          gcloud run services describe "$SERVICE" --region "$REGION" \
+            --format='value(status.latestReadyRevisionName, status.url)'
