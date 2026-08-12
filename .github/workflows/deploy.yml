@@ -77,8 +77,21 @@ jobs:
           docker push --all-tags "$IMAGE"
           echo "IMAGE_URI=$IMAGE:$SHORT_SHA" >> "$GITHUB_ENV"
 
+      # Prod mirrors cloudbuild/prod.yaml: the new revision comes up at 0%
+      # traffic (--no-traffic) so it can be smoke-tested before promotion —
+      # `gcloud run deploy` otherwise sends 100% to the new revision immediately,
+      # bypassing the verify-then-promote step prod.yaml exists to enforce.
+      # dev/staging promote on deploy as before.
       - name: Deploy Cloud Run service
-        run: gcloud run deploy "$SERVICE" --image "$IMAGE_URI" --region "$REGION" --platform managed
+        run: |
+          if [ "$ENVIRONMENT" = "prod" ]; then
+            gcloud run deploy "$SERVICE" --image "$IMAGE_URI" --region "$REGION" --platform managed --no-traffic
+            REV=$(gcloud run services describe "$SERVICE" --region "$REGION" --format='value(status.latestCreatedRevisionName)')
+            echo "::notice::Prod revision $REV is deployed at 0% traffic. Smoke-test it, then promote:"
+            echo "::notice::  gcloud run services update-traffic $SERVICE --to-latest --region $REGION --project $PROJECT_ID"
+          else
+            gcloud run deploy "$SERVICE" --image "$IMAGE_URI" --region "$REGION" --platform managed
+          fi
 
       - name: Report deployed revision
         run: |
