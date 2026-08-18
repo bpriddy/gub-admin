@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 const UpdateOfficeSchema = z.object({
   name: z.string().min(1).optional(),
-  oktaCity: z.string().nullable().optional(),
+  syncCity: z.string().nullable().optional(),
   isActive: z.boolean().optional(),
   startedAt: z.string().nullable().optional(),
   changedByStaffId: z.string().uuid().optional(),
@@ -15,14 +15,14 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   const parsed = UpdateOfficeSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const { name, oktaCity, isActive, startedAt, changedByStaffId } = parsed.data;
+  const { name, syncCity, isActive, startedAt, changedByStaffId } = parsed.data;
 
   const before = await prisma.office.findUnique({ where: { id: params.id } });
   if (!before) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const data: Record<string, unknown> = {};
   if (name !== undefined) data.name = name;
-  if (oktaCity !== undefined) data.oktaCity = oktaCity ?? null;
+  if (syncCity !== undefined) data.syncCity = syncCity ?? null;
   if (isActive !== undefined) data.isActive = isActive;
   if (startedAt !== undefined) data.startedAt = startedAt ? new Date(startedAt) : null;
 
@@ -42,8 +42,8 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   if (name !== undefined && name !== before.name) {
     changeRows.push({ officeId: params.id, property: 'name', valueText: name, changedBy });
   }
-  if (oktaCity !== undefined && (oktaCity ?? null) !== before.oktaCity) {
-    changeRows.push({ officeId: params.id, property: 'okta_city', valueText: oktaCity ?? null, changedBy });
+  if (syncCity !== undefined && (syncCity ?? null) !== before.syncCity) {
+    changeRows.push({ officeId: params.id, property: 'sync_city', valueText: syncCity ?? null, changedBy });
   }
   if (isActive !== undefined && isActive !== before.isActive) {
     changeRows.push({ officeId: params.id, property: 'is_active', valueText: String(isActive), changedBy });
