@@ -50,6 +50,16 @@ const JOB_NAME =
 
 export const DRIVE_POLL_RESOURCE = `projects/${PROJECT_ID}/locations/${REGION}/jobs/${JOB_NAME}`;
 
+// A second scheduled job in the same shape: the dev-only auto-approve
+// toggle. `paused=true` by default in terraform; gub-admin's operator
+// toggle just pauses/resumes it. Same runtime SA + same custom role
+// grant covers this too (the role is project-level).
+const AUTO_APPROVE_JOB_NAME =
+  process.env['DRIVE_AUTO_APPROVE_JOB_NAME'] ??
+  `drive-auto-approve-${process.env['DEPLOY_ENV'] ?? 'dev'}`;
+
+export const DRIVE_AUTO_APPROVE_RESOURCE = `projects/${PROJECT_ID}/locations/${REGION}/jobs/${AUTO_APPROVE_JOB_NAME}`;
+
 /** Lazy client — built on first call, cached after. ADC reads at first use. */
 let cachedClient: ReturnType<typeof google.cloudscheduler> | null = null;
 
@@ -62,6 +72,12 @@ function client() {
   return cachedClient;
 }
 
+/**
+ * Shape returned by the get/pause/resume/patch endpoints. Named
+ * DrivePollJobInfo for legacy reasons — it's actually generic over any
+ * Cloud Scheduler job and also carries the auto-approve job info.
+ * Rename to SchedulerJobInfo in a future cleanup pass.
+ */
 export interface DrivePollJobInfo {
   name: string;
   schedule: string;
@@ -177,4 +193,27 @@ export async function updateDrivePollSchedule(opts: {
     state: j.state,
     lastAttemptTime: j.lastAttemptTime ?? null,
   };
+}
+
+// ── Auto-approve scheduler (dev bypass toggle) ─────────────────────────────
+// Same three ops (read, pause, resume) — no cadence editor because
+// auto-approve's schedule is fixed at */15 (see drive_auto_approve.tf).
+// Uses the same custom role as the drive-poll ops.
+
+export async function getDriveAutoApproveJob(): Promise<DrivePollJobInfo> {
+  const c = client();
+  const res = await c.projects.locations.jobs.get({ name: DRIVE_AUTO_APPROVE_RESOURCE });
+  return normalizeJob(res.data);
+}
+
+export async function pauseDriveAutoApproveJob(): Promise<DrivePollJobInfo> {
+  const c = client();
+  const res = await c.projects.locations.jobs.pause({ name: DRIVE_AUTO_APPROVE_RESOURCE });
+  return normalizeJob(res.data);
+}
+
+export async function resumeDriveAutoApproveJob(): Promise<DrivePollJobInfo> {
+  const c = client();
+  const res = await c.projects.locations.jobs.resume({ name: DRIVE_AUTO_APPROVE_RESOURCE });
+  return normalizeJob(res.data);
 }

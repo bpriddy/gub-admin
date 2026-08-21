@@ -30,7 +30,12 @@ import { AccountBackfillRow } from './account-backfill-row';
 import { RequestRow } from './request-row';
 import { RestrictedFileRow } from './restricted-file-row';
 import { PollSchedulerPanel } from './poll-scheduler-panel';
-import { getDrivePollJob, type DrivePollJobInfo } from '@/lib/cloud-scheduler';
+import { AutoApprovePanel } from './auto-approve-panel';
+import {
+  getDrivePollJob,
+  getDriveAutoApproveJob,
+  type DrivePollJobInfo,
+} from '@/lib/cloud-scheduler';
 import { CADENCE_PRESETS, type CadenceKey } from '@/lib/drive-cadence';
 
 export const dynamic = 'force-dynamic';
@@ -135,19 +140,41 @@ export default async function DriveBackfillPage() {
 
   // Scheduler status — fetched independently and defensively (Cloud
   // Scheduler read requires ADC + IAM, which are absent locally). A
-  // failure here must NOT take the page down; the panel renders a
-  // scoped error surface instead.
+  // failure here must NOT take the page down; the panels render a
+  // scoped error surface instead. Both schedulers fetched in parallel
+  // and each failure is independent (one being down doesn't kill the
+  // other panel).
   let pollJob: DrivePollJobInfo | null = null;
   let pollJobError: string | null = null;
   let matchedPreset: CadenceKey | null = null;
-  try {
-    pollJob = await getDrivePollJob();
+  let autoApproveJob: DrivePollJobInfo | null = null;
+  let autoApproveJobError: string | null = null;
+
+  const [pollResult, autoApproveResult] = await Promise.allSettled([
+    getDrivePollJob(),
+    getDriveAutoApproveJob(),
+  ]);
+
+  if (pollResult.status === 'fulfilled') {
+    pollJob = pollResult.value;
     matchedPreset =
       (Object.keys(CADENCE_PRESETS) as CadenceKey[]).find(
         (k) => CADENCE_PRESETS[k].schedule === pollJob!.schedule,
       ) ?? null;
-  } catch (err) {
-    pollJobError = err instanceof Error ? err.message : String(err);
+  } else {
+    pollJobError =
+      pollResult.reason instanceof Error
+        ? pollResult.reason.message
+        : String(pollResult.reason);
+  }
+
+  if (autoApproveResult.status === 'fulfilled') {
+    autoApproveJob = autoApproveResult.value;
+  } else {
+    autoApproveJobError =
+      autoApproveResult.reason instanceof Error
+        ? autoApproveResult.reason.message
+        : String(autoApproveResult.reason);
   }
 
   // Reduce live requests to a per-account status (most recent wins).
@@ -212,6 +239,9 @@ export default async function DriveBackfillPage() {
         readError={pollJobError}
         matchedPreset={matchedPreset}
       />
+
+      {/* Auto-approve toggle — dev bypass of human review. Off by default. */}
+      <AutoApprovePanel job={autoApproveJob} readError={autoApproveJobError} />
 
       {triggerLikelyFailed && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg px-5 py-3 mb-6 text-sm text-amber-800">
