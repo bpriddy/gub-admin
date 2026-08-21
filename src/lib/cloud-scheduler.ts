@@ -11,10 +11,20 @@
  * Auth:
  *   Runs server-side via Application Default Credentials (gub-admin's
  *   Cloud Run runtime SA). The runtime SA was granted a narrow custom
- *   role `gubAdminDriveSchedulerEditor` (cloudscheduler.jobs.{get,list,
- *   update}) by gcp-universal-backend's terraform/drive_poll.tf. Any
- *   broader Cloud Scheduler operation (create, delete, run, pause)
- *   would 403 — that's intentional.
+ *   role `gubAdminDriveSchedulerEditor` by gcp-universal-backend's
+ *   terraform/drive_poll.tf. The role covers cloudscheduler.jobs.{get,
+ *   list,update,pause,resume} — pause + resume were added when the
+ *   admin UI grew its scheduler control panel (2026-05-20). Any broader
+ *   Cloud Scheduler operation (create, delete, run) still 403s — that's
+ *   intentional.
+ *
+ *   Note: "Poll now" from the UI does NOT call scheduler.jobs.run. It
+ *   fires the gub-drive-sync Cloud Run Job directly via triggerDriveSync
+ *   Job({ mode: 'poll' }) — same execution path Cloud Scheduler uses when
+ *   its cron fires, just triggered on demand. That path uses roles/run.
+ *   developer on the Job (separate IAM grant), NOT the scheduler role
+ *   here — which is why "Poll now" works even when pause/resume don't
+ *   (e.g. before the terraform expansion applies).
  *
  * Resource path resolution:
  *   The job's full GCP resource path is
@@ -74,6 +84,51 @@ export async function getDrivePollJob(): Promise<DrivePollJobInfo> {
   if (!j.schedule || !j.timeZone || !j.state) {
     throw new Error(
       `Cloud Scheduler returned incomplete job for ${DRIVE_POLL_RESOURCE}: ${JSON.stringify(j)}`,
+    );
+  }
+  return {
+    name: j.name ?? JOB_NAME,
+    schedule: j.schedule,
+    timeZone: j.timeZone,
+    state: j.state,
+    lastAttemptTime: j.lastAttemptTime ?? null,
+  };
+}
+
+/**
+ * Pause the Drive poll job. Cloud Scheduler's own state flips to
+ * 'PAUSED'; existing in-flight executions are unaffected (Cloud
+ * Scheduler doesn't cancel a fire that's already dispatched — pause
+ * just stops future ticks). Idempotent — pausing a paused job is a
+ * no-op that returns the current state.
+ */
+export async function pauseDrivePollJob(): Promise<DrivePollJobInfo> {
+  const c = client();
+  const res = await c.projects.locations.jobs.pause({ name: DRIVE_POLL_RESOURCE });
+  return normalizeJob(res.data);
+}
+
+/**
+ * Resume a paused Drive poll job. Next tick fires on the existing cron.
+ * Idempotent.
+ */
+export async function resumeDrivePollJob(): Promise<DrivePollJobInfo> {
+  const c = client();
+  const res = await c.projects.locations.jobs.resume({ name: DRIVE_POLL_RESOURCE });
+  return normalizeJob(res.data);
+}
+
+/** Shared shape-check + coerce for the four endpoints that return a Job. */
+function normalizeJob(j: {
+  name?: string | null;
+  schedule?: string | null;
+  timeZone?: string | null;
+  state?: string | null;
+  lastAttemptTime?: string | null;
+}): DrivePollJobInfo {
+  if (!j.schedule || !j.timeZone || !j.state) {
+    throw new Error(
+      `Cloud Scheduler returned incomplete job: ${JSON.stringify(j)}`,
     );
   }
   return {

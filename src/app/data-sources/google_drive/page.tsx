@@ -29,6 +29,9 @@ import { AutoRefresh } from '../[key]/auto-refresh';
 import { AccountBackfillRow } from './account-backfill-row';
 import { RequestRow } from './request-row';
 import { RestrictedFileRow } from './restricted-file-row';
+import { PollSchedulerPanel } from './poll-scheduler-panel';
+import { getDrivePollJob, type DrivePollJobInfo } from '@/lib/cloud-scheduler';
+import { CADENCE_PRESETS, type CadenceKey } from '@/lib/drive-cadence';
 
 export const dynamic = 'force-dynamic';
 
@@ -130,6 +133,23 @@ export default async function DriveBackfillPage() {
     }),
   ]);
 
+  // Scheduler status — fetched independently and defensively (Cloud
+  // Scheduler read requires ADC + IAM, which are absent locally). A
+  // failure here must NOT take the page down; the panel renders a
+  // scoped error surface instead.
+  let pollJob: DrivePollJobInfo | null = null;
+  let pollJobError: string | null = null;
+  let matchedPreset: CadenceKey | null = null;
+  try {
+    pollJob = await getDrivePollJob();
+    matchedPreset =
+      (Object.keys(CADENCE_PRESETS) as CadenceKey[]).find(
+        (k) => CADENCE_PRESETS[k].schedule === pollJob!.schedule,
+      ) ?? null;
+  } catch (err) {
+    pollJobError = err instanceof Error ? err.message : String(err);
+  }
+
   // Reduce live requests to a per-account status (most recent wins).
   const livePerAccount = new Map<string, 'pending' | 'running'>();
   for (const r of liveByAccount) {
@@ -185,6 +205,13 @@ export default async function DriveBackfillPage() {
           </p>
         </div>
       </div>
+
+      {/* Poll scheduler status + controls (Pause/Resume/Poll now/Cadence). */}
+      <PollSchedulerPanel
+        job={pollJob}
+        readError={pollJobError}
+        matchedPreset={matchedPreset}
+      />
 
       {triggerLikelyFailed && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg px-5 py-3 mb-6 text-sm text-amber-800">
