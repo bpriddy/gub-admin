@@ -47,7 +47,12 @@ export type DriveSyncMode =
   // Pattern A enqueue-as-trigger: gub-admin writes a drive_backfill_request
   // row then fires the Job in this mode to drain it. The Job's main.ts
   // dispatches to processBackfillQueue (src/drive/backfill-queue.ts).
-  | 'backfill-pending';
+  | 'backfill-pending'
+  // Forward-sync-v2 driver: enqueue a mode=forward driveSyncRun for every
+  // bootstrap-completed account, then drain via processBackfillQueue.
+  // Same code path a Backfill click uses; per-account Activity API cursor.
+  // What the drive-poll-<env> scheduler fires as of 2026-08-24.
+  | 'forward-all';
 
 export interface TriggerDriveSyncOptions {
   /** Which mode to fire. Default: 'run-full-sync' (the Sync button). */

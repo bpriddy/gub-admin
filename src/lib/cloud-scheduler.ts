@@ -18,13 +18,13 @@
  *   Cloud Scheduler operation (create, delete, run) still 403s — that's
  *   intentional.
  *
- *   Note: "Poll now" from the UI does NOT call scheduler.jobs.run. It
+ *   Note: "Run now" from the UI does NOT call scheduler.jobs.run. It
  *   fires the gub-drive-sync Cloud Run Job directly via triggerDriveSync
- *   Job({ mode: 'poll' }) — same execution path Cloud Scheduler uses when
- *   its cron fires, just triggered on demand. That path uses roles/run.
- *   developer on the Job (separate IAM grant), NOT the scheduler role
- *   here — which is why "Poll now" works even when pause/resume don't
- *   (e.g. before the terraform expansion applies).
+ *   Job({ mode: 'forward-all' }) — same execution path Cloud Scheduler
+ *   uses when its cron fires, just triggered on demand. That path uses
+ *   roles/run.developer on the Job (separate IAM grant), NOT the
+ *   scheduler role here — which is why "Run now" works even when
+ *   pause/resume don't (e.g. before the terraform expansion applies).
  *
  * Resource path resolution:
  *   The job's full GCP resource path is

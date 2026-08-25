@@ -9,24 +9,24 @@
  * Actions:
  *   pause / resume  → call Cloud Scheduler's pause / resume RPCs on the
  *                     drive-poll-<env> job. Requires the runtime SA's
- *                     custom role to include cloudscheduler.jobs.{pause,
- *                     resume} — added in the same commit that lands this
- *                     route (see gcp-universal-backend/terraform/
- *                     drive_poll.tf). If the terraform hasn't been
- *                     applied yet, both 403; the UI surfaces the error.
+ *                     custom role to include cloudscheduler.jobs.enable
+ *                     (which covers both, despite the RPC names). Terraform
+ *                     lives in gcp-universal-backend/terraform/drive_poll.tf.
  *
- *   poll-now        → fire the gub-drive-sync Cloud Run Job with
- *                     mode='poll'. Bypasses Cloud Scheduler entirely —
- *                     an on-demand equivalent of what the scheduler
- *                     would do on its next tick. Uses the run.developer
- *                     grant on the Job, not the scheduler role, so this
- *                     works even before the pause/resume terraform
- *                     lands.
+ *   run-now         → fire the gub-drive-sync Cloud Run Job with the same
+ *                     mode the drive-poll-<env> scheduler fires today
+ *                     (mode='forward-all'). Bypasses Cloud Scheduler
+ *                     entirely — an on-demand equivalent of the scheduler's
+ *                     next tick. Uses the run.developer grant on the Job,
+ *                     not the scheduler role. (Previously fired mode='poll'
+ *                     when the scheduler still fired legacy poll; retargeted
+ *                     2026-08-24 alongside the scheduler switch to
+ *                     forward-sync-v2.)
  *
  * Returns the updated job info for pause/resume (so the UI can flip its
- * state pill without a separate refetch). Poll-now returns just
+ * state pill without a separate refetch). run-now returns just
  * { status: 'triggered' } — the Cloud Scheduler job's state is unchanged
- * by an on-demand poll.
+ * by an on-demand run.
  */
 
 import { NextResponse } from 'next/server';
@@ -40,7 +40,7 @@ import { triggerDriveSyncJob, TriggerJobError } from '@/lib/drive-sync/trigger-j
 
 const ActionSchema = z
   .object({
-    action: z.enum(['pause', 'resume', 'poll-now']),
+    action: z.enum(['pause', 'resume', 'run-now']),
   })
   .strict();
 
@@ -65,8 +65,8 @@ export async function POST(request: Request) {
         action === 'pause' ? await pauseDrivePollJob() : await resumeDrivePollJob();
       return NextResponse.json({ action, job });
     }
-    // poll-now
-    await triggerDriveSyncJob({ mode: 'poll' });
+    // run-now — matches what the scheduler fires (forward-sync-v2 driver).
+    await triggerDriveSyncJob({ mode: 'forward-all' });
     return NextResponse.json({ action, status: 'triggered' });
   } catch (err) {
     const detail =

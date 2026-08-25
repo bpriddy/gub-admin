@@ -6,9 +6,12 @@
  *
  * Replaces the previous (dead) cadence-editor.tsx, which lost its
  * hookup when the Drive page was redesigned around per-account
- * backfill. The scheduler is still the automation driver (fires
- * gub-drive-sync in `poll` mode on a cron); this panel restores UI
- * visibility + control.
+ * backfill. The scheduler is still the automation driver — as of
+ * 2026-08-24 it fires gub-drive-sync in `forward-all` mode
+ * (forward-sync-v2 driver, per-account Activity cursor), not the
+ * legacy `poll` mode. The scheduler RESOURCE name stayed drive-poll-*
+ * because renaming forces destroy+recreate; that name is now a legacy
+ * label, not a semantic one.
  *
  * Four things surfaced/controllable:
  *   1. State (ENABLED / PAUSED / other) — asymmetric visual weight:
@@ -16,12 +19,12 @@
  *      Paused matters more than running for operator attention.
  *   2. Cadence (preset dropdown → PATCHes the cron via the existing
  *      /api/.../scheduler POST route).
- *   3. Pause / Resume — flip the scheduler state via the new
- *      /api/.../scheduler/action route.
- *   4. Poll now — one-off on-demand poll; fires the gub-drive-sync
- *      Job directly with mode='poll'. Works even when paused (bypasses
- *      the scheduler) and even before the pause/resume terraform
- *      lands (uses a different IAM path).
+ *   3. Pause / Resume — flip the scheduler state via
+ *      /api/.../scheduler/action.
+ *   4. Run now — one-off on-demand fire of gub-drive-sync in the same
+ *      mode the scheduler uses (`forward-all`). Works even when paused
+ *      (bypasses the scheduler) and even before the pause/resume
+ *      terraform lands (uses a different IAM path).
  *
  * All actions call router.refresh() on success so the server-rendered
  * page re-reads the live scheduler state.
@@ -32,7 +35,7 @@ import { useRouter } from 'next/navigation';
 import { CADENCE_PRESETS, type CadenceKey } from '@/lib/drive-cadence';
 import type { DrivePollJobInfo } from '@/lib/cloud-scheduler';
 
-type PendingAction = 'pause' | 'resume' | 'poll-now' | 'save-cadence' | null;
+type PendingAction = 'pause' | 'resume' | 'run-now' | 'save-cadence' | null;
 
 interface Props {
   /** Live scheduler job info, fetched server-side. Null when the read failed. */
@@ -88,7 +91,7 @@ export function PollSchedulerPanel({ job, readError, matchedPreset }: Props) {
   const isWeird = !isPaused && !isEnabled; // DISABLED, UPDATE_FAILED, etc.
   const cadenceDirty = selectedPreset !== '' && selectedPreset !== matchedPreset;
 
-  async function callAction(action: 'pause' | 'resume' | 'poll-now') {
+  async function callAction(action: 'pause' | 'resume' | 'run-now') {
     setPending(action);
     setError(null);
     try {
@@ -189,7 +192,7 @@ export function PollSchedulerPanel({ job, readError, matchedPreset }: Props) {
         </div>
       )}
 
-      {/* Cadence + poll-now + (if enabled) pause button — single card. */}
+      {/* Cadence + run-now + (if enabled) pause button — single card. */}
       <div className="bg-white border border-gray-200 rounded-lg px-5 py-4">
         <div className="flex items-start justify-between gap-4 mb-3">
           <div className="flex-1">
@@ -206,8 +209,9 @@ export function PollSchedulerPanel({ job, readError, matchedPreset }: Props) {
             </div>
             <div className="text-xs text-gray-500">
               Fires <code className="text-xs bg-gray-100 px-1 rounded">gub-drive-sync</code>{' '}
-              with <code className="text-xs bg-gray-100 px-1 rounded">mode=poll</code> on the
-              cron below. Last attempt: {timeAgo(job.lastAttemptTime)}.
+              with <code className="text-xs bg-gray-100 px-1 rounded">mode=forward-all</code>{' '}
+              on the cron below (per-account Activity cursor; same code path as a Backfill
+              click). Last attempt: {timeAgo(job.lastAttemptTime)}.
             </div>
           </div>
           {isEnabled && (
@@ -254,12 +258,12 @@ export function PollSchedulerPanel({ job, readError, matchedPreset }: Props) {
             {pending === 'save-cadence' ? 'Saving…' : 'Save cadence'}
           </button>
           <button
-            onClick={() => callAction('poll-now')}
+            onClick={() => callAction('run-now')}
             disabled={pending !== null}
             className="text-sm px-3 py-1.5 rounded border border-gray-900 text-gray-900 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Fire the gub-drive-sync Job in poll mode once, right now. Works even while paused."
+            title="Fire the gub-drive-sync Job in forward-all mode once, right now — same mode the scheduler uses. Works even while paused."
           >
-            {pending === 'poll-now' ? 'Firing…' : 'Poll now'}
+            {pending === 'run-now' ? 'Firing…' : 'Run now'}
           </button>
         </div>
 
