@@ -9,19 +9,23 @@ export async function POST(request: Request, { params }: { params: { id: string 
   const parsed = AddMemberSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  // upsert so duplicate adds are idempotent
-  const member = await prisma.teamMember.upsert({
-    where: { teamId_staffId: { teamId: params.id, staffId: parsed.data.staffId } },
-    create: { teamId: params.id, staffId: parsed.data.staffId },
-    update: {},
+  // duplicate adds are idempotent; uniqueness is guarded at the DB level by the
+  // partial index team_members_linked_unique (team_id, staff_id WHERE staff_id IS NOT NULL),
+  // which Prisma cannot express as a compound unique in the schema
+  const existing = await prisma.teamMember.findFirst({
+    where: { teamId: params.id, staffId: parsed.data.staffId },
+  });
+  if (existing) return NextResponse.json(existing, { status: 200 });
+  const member = await prisma.teamMember.create({
+    data: { teamId: params.id, staffId: parsed.data.staffId },
   });
   return NextResponse.json(member, { status: 201 });
 }
 
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
   const { staffId } = await request.json() as { staffId: string };
-  await prisma.teamMember.delete({
-    where: { teamId_staffId: { teamId: params.id, staffId } },
+  await prisma.teamMember.deleteMany({
+    where: { teamId: params.id, staffId },
   });
   return new NextResponse(null, { status: 204 });
 }

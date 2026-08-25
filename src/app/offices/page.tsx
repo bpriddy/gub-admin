@@ -7,20 +7,20 @@ import Link from 'next/link';
 interface Office {
   id: string;
   name: string;
-  oktaCity: string | null;
+  syncCity: string | null;
   isActive: boolean;
   startedAt: string | null;
   _count: { staff: number };
 }
 
-type EditState = { name: string; oktaCity: string; isActive: boolean; startedAt: string };
+type EditState = { name: string; syncCity: string; isActive: boolean; startedAt: string };
 
 export default function OfficesPage() {
   const router = useRouter();
   const [offices, setOffices] = useState<Office[]>([]);
-  const [newForm, setNewForm] = useState({ name: '', oktaCity: '', startedAt: '', isActive: true });
+  const [newForm, setNewForm] = useState({ name: '', syncCity: '', startedAt: '', isActive: true });
   const [editId, setEditId] = useState<string | null>(null);
-  const [editState, setEditState] = useState<EditState>({ name: '', oktaCity: '', isActive: true, startedAt: '' });
+  const [editState, setEditState] = useState<EditState>({ name: '', syncCity: '', isActive: true, startedAt: '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -40,14 +40,14 @@ export default function OfficesPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: newForm.name,
-        oktaCity: newForm.oktaCity || null,
+        syncCity: newForm.syncCity || null,
         isActive: newForm.isActive,
         startedAt: newForm.startedAt || null,
       }),
     });
     setSaving(false);
     if (res.ok) {
-      setNewForm({ name: '', oktaCity: '', startedAt: '', isActive: true });
+      setNewForm({ name: '', syncCity: '', startedAt: '', isActive: true });
       void load();
     } else {
       const d = await res.json();
@@ -59,7 +59,7 @@ export default function OfficesPage() {
     setEditId(o.id);
     setEditState({
       name: o.name,
-      oktaCity: o.oktaCity ?? '',
+      syncCity: o.syncCity ?? '',
       isActive: o.isActive,
       startedAt: o.startedAt ? o.startedAt.split('T')[0] : '',
     });
@@ -72,7 +72,7 @@ export default function OfficesPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: editState.name,
-        oktaCity: editState.oktaCity || null,
+        syncCity: editState.syncCity || null,
         isActive: editState.isActive,
         startedAt: editState.startedAt || null,
       }),
@@ -93,7 +93,7 @@ export default function OfficesPage() {
       <div className="mb-6">
         <button onClick={() => router.back()} className="text-sm text-gray-500 hover:text-gray-700">← Back</button>
         <h1 className="text-xl font-semibold mt-2">Offices</h1>
-        <p className="text-sm text-gray-500">Physical locations. Set the Okta city value to enable automatic staff sync.</p>
+        <p className="text-sm text-gray-500">Physical locations. Set the Sync city value to enable automatic staff sync.</p>
       </div>
 
       {/* Add new */}
@@ -108,9 +108,9 @@ export default function OfficesPage() {
             required
           />
           <input
-            value={newForm.oktaCity}
-            onChange={(e) => setNewForm((f) => ({ ...f, oktaCity: e.target.value }))}
-            placeholder="Okta city (e.g. New York)"
+            value={newForm.syncCity}
+            onChange={(e) => setNewForm((f) => ({ ...f, syncCity: e.target.value }))}
+            placeholder="Sync city (e.g. New York)"
             className="flex-1 min-w-40 text-sm border border-gray-300 rounded px-2 py-1.5"
             title="Must match the profile.city value in Okta exactly"
           />
@@ -146,7 +146,7 @@ export default function OfficesPage() {
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Name</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Okta city</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Sync city</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Started</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Staff</th>
@@ -171,8 +171,8 @@ export default function OfficesPage() {
                     </td>
                     <td className="px-4 py-2">
                       <input
-                        value={editState.oktaCity}
-                        onChange={(e) => setEditState((s) => ({ ...s, oktaCity: e.target.value }))}
+                        value={editState.syncCity}
+                        onChange={(e) => setEditState((s) => ({ ...s, syncCity: e.target.value }))}
                         placeholder="e.g. New York"
                         className="w-full text-sm border border-gray-300 rounded px-2 py-1"
                       />
@@ -207,8 +207,8 @@ export default function OfficesPage() {
                   <>
                     <td className="px-4 py-3 font-medium">{o.name}</td>
                     <td className="px-4 py-3">
-                      {o.oktaCity
-                        ? <span className="text-xs font-mono text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded">{o.oktaCity}</span>
+                      {o.syncCity
+                        ? <span className="text-xs font-mono text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded">{o.syncCity}</span>
                         : <span className="text-gray-300 text-xs">not mapped</span>}
                     </td>
                     <td className="px-4 py-3 text-gray-500">

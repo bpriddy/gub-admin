@@ -21,6 +21,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@anomaly-technology/gub-schemas": "^0.1.0",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
@@ -30,5 +31,8 @@
     "prettier": "^3.9.6",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"
+  },
+  "prisma": {
+    "schema": "node_modules/@anomaly-technology/gub-schemas/prisma/schema.prisma"
   }
 }
