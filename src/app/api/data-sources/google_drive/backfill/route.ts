@@ -70,7 +70,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const account = await prisma.account.findUnique({
     where: { id: body.accountId },
-    select: { id: true, driveFolderId: true },
+    select: { id: true, driveFolderId: true, driveBootstrapCompletedAt: true },
   });
   if (!account) {
     return NextResponse.json({ error: 'Account not found' }, { status: 404 });
@@ -92,17 +92,36 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (live) {
     return NextResponse.json(
       {
-        error: `A ${live.status} backfill request already exists for this account`,
+        error: `A ${live.status} sync request already exists for this account`,
         existingRequestId: live.id,
       },
       { status: 409 },
     );
   }
 
+  // Dispatch on bootstrap state (design intent: bootstrap is one-time,
+  // then forward takes over). Server-side so the client can't accidentally
+  // enqueue the wrong mode. Two cursor fields, two application modes,
+  // two code paths — the account's bootstrap-complete flag is the only
+  // authoritative signal for which one is live now.
+  //
+  //   bootstrap not complete → mode='bootstrap' → runBackfill →
+  //     day-by-day walk from driveBootstrapCursor, AUTO-APPLIES.
+  //     allRemaining=true (from the client) chains continuations until
+  //     cursor reaches today.
+  //   bootstrap complete     → mode='forward' → runForward →
+  //     Activity API window from driveForwardCursorAt to now,
+  //     PROPOSES FOR REVIEW. Same code path as the scheduler's
+  //     forward-all, scoped to this one account. allRemaining is
+  //     irrelevant (forward drains the window in one pass) — passed
+  //     through but ignored by the engine.
+  const isBootstrapComplete = account.driveBootstrapCompletedAt !== null;
+  const dispatchedMode = isBootstrapComplete ? 'forward' : 'bootstrap';
+
   const created = await prisma.driveSyncRun.create({
     data: {
       accountId: body.accountId,
-      mode: 'bootstrap',
+      mode: dispatchedMode,
       allRemaining: body.allRemaining,
       requestedBy: actor.actorId,
     },

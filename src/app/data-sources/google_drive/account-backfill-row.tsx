@@ -11,10 +11,15 @@ interface AccountBackfillRowProps {
   lastBackfill: { ago: string; abs: string } | null;
   cursor: string; // 'none' or YYYY-MM-DD
   /**
-   * Operator-facing button label mode. Derived in the page from
-   * cursor age. Same underlying operation either way (1-day scan
-   * via processBackfillQueue); the label just matches the operator's
-   * mental model of what they're doing.
+   * Operator-facing button label mode. Derived in the page from the
+   * account's driveBootstrapCompletedAt (server-authoritative). Server
+   * dispatches the same way in the API — the client's `mode` here is
+   * a label hint only, not authorization.
+   *
+   *   sync     → account is bootstrap-complete; enqueues mode='forward'
+   *              (Activity API, proposes for review)
+   *   backfill → account still bootstrapping; enqueues mode='bootstrap'
+   *              (day-walk, auto-applies)
    */
   mode: 'sync' | 'backfill';
   liveStatus: 'pending' | 'running' | null;
@@ -100,11 +105,12 @@ export function AccountBackfillRow({
     setTriggerState('triggering');
     setTriggerError(null);
     try {
-      // Mode determines scope:
-      //   sync     → scans=1, allRemaining=false (cursor near today)
-      //   backfill → allRemaining=true (cursor far behind; engine walks
-      //              until cursor reaches today, chunked across Job
-      //              executions via Admin API self-trigger)
+      // allRemaining is only meaningful for bootstrap mode (chains
+      // continuations until cursor reaches today). Server dispatches
+      // the actual mode from the account's bootstrap state — for a
+      // bootstrap-complete account the server enqueues mode='forward'
+      // and allRemaining is passed through but ignored by runForward
+      // (which always drains its Activity window in one pass).
       const res = await fetch('/api/data-sources/google_drive/backfill', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -250,8 +256,8 @@ export function AccountBackfillRow({
               : liveStatus
                 ? `A ${liveStatus} request already exists for this account`
                 : mode === 'sync'
-                  ? 'Queue a 1-day sync (cursor is within a week of today)'
-                  : 'Queue a catch-up backfill — engine walks until cursor reaches today, chunked across Job executions automatically'
+                  ? 'Bootstrap complete — enqueues a forward-sync (Activity API from the account cursor to now, proposes for review). Same code path the daily scheduler uses, scoped to this account.'
+                  : 'Bootstrap not yet complete — enqueues a day-walk chunk. allRemaining=true, so the engine chains continuations until the cursor reaches today.'
           }
         >
           {triggerState === 'triggering'

@@ -68,25 +68,23 @@ function formatCursorYmd(d: Date | null): string {
 }
 
 /**
- * Pick the operator-facing button mode based on cursor age.
+ * Pick the operator-facing button mode from the account's bootstrap
+ * state. This mirrors the actual code path the API dispatches:
  *
- * The underlying operation is identical — both `sync` and `backfill`
- * queue a 1-day scan via `processBackfillQueue`. The label just matches
- * the operator's mental model:
+ *   - bootstrap NOT complete → "Backfill" — enqueues mode='bootstrap',
+ *     the day-by-day walk (runBackfill, advances driveBootstrapCursor,
+ *     auto-applies).
+ *   - bootstrap complete       → "Sync" — enqueues mode='forward', the
+ *     Activity-API pull-up (runForward, advances driveForwardCursorAt,
+ *     proposes for review). Same code path the drive-poll-<env>
+ *     scheduler's forward-all mode uses, scoped to this one account.
  *
- *   - cursor < 7 days old or = today → "Sync" (we're current; this is
- *     day-to-day refresh)
- *   - cursor null (never scanned) or ≥ 7 days old → "Backfill" (we're
- *     catching up; the gap is the point)
- *
- * One-week threshold is a UX heuristic, not a system constraint — easy
- * to revisit if the operator's mental model shifts.
+ * Was a cursor-age heuristic (< 7 days = sync); replaced 2026-08-25 when
+ * we realized the two paths were writing SEPARATE cursor fields and
+ * processing the same account with conflicting application modes.
  */
-const SYNC_CUTOFF_DAYS = 7;
-function backfillMode(cursor: Date | null): 'sync' | 'backfill' {
-  if (!cursor) return 'backfill';
-  const ageDays = Math.floor((Date.now() - cursor.getTime()) / (24 * 60 * 60 * 1000));
-  return ageDays < SYNC_CUTOFF_DAYS ? 'sync' : 'backfill';
+function backfillMode(bootstrapCompletedAt: Date | null): 'sync' | 'backfill' {
+  return bootstrapCompletedAt ? 'sync' : 'backfill';
 }
 
 const STATUS_BADGES: Record<string, string> = {
@@ -107,8 +105,18 @@ export default async function DriveBackfillPage() {
         id: true,
         name: true,
         driveFolderId: true,
+        // Two "last run" timestamps: driveLastRunAt is stamped by
+        // bootstrap runs (runBackfill), driveLastSyncedAt by forward
+        // runs (runForward). Coalesce below so the column reflects
+        // whichever path most recently touched the account.
         driveLastRunAt: true,
+        driveLastSyncedAt: true,
+        // Two cursors: driveBootstrapCursor (day-walk) is active until
+        // driveBootstrapCompletedAt is stamped; from then on
+        // driveForwardCursorAt (Activity timestamp) is the live one.
         driveBootstrapCursor: true,
+        driveBootstrapCompletedAt: true,
+        driveForwardCursorAt: true,
       },
       orderBy: { name: 'asc' },
     }),
@@ -279,22 +287,36 @@ export default async function DriveBackfillPage() {
                   </td>
                 </tr>
               )}
-              {accounts.map((acct) => (
-                <AccountBackfillRow
-                  key={acct.id}
-                  accountId={acct.id}
-                  name={acct.name}
-                  driveFolderId={acct.driveFolderId}
-                  lastBackfill={
-                    acct.driveLastRunAt
-                      ? { ago: timeAgo(acct.driveLastRunAt), abs: formatTime(acct.driveLastRunAt) }
-                      : null
-                  }
-                  cursor={formatCursorYmd(acct.driveBootstrapCursor)}
-                  mode={backfillMode(acct.driveBootstrapCursor)}
-                  liveStatus={livePerAccount.get(acct.id) ?? null}
-                />
-              ))}
+              {accounts.map((acct) => {
+                // Coalesce the last-touched timestamp across both paths.
+                const lastTouch =
+                  acct.driveLastSyncedAt && acct.driveLastRunAt
+                    ? acct.driveLastSyncedAt > acct.driveLastRunAt
+                      ? acct.driveLastSyncedAt
+                      : acct.driveLastRunAt
+                    : (acct.driveLastSyncedAt ?? acct.driveLastRunAt);
+                // Show whichever cursor is live for this account: forward
+                // cursor once bootstrap is done, bootstrap cursor before.
+                const liveCursor = acct.driveBootstrapCompletedAt
+                  ? acct.driveForwardCursorAt
+                  : acct.driveBootstrapCursor;
+                return (
+                  <AccountBackfillRow
+                    key={acct.id}
+                    accountId={acct.id}
+                    name={acct.name}
+                    driveFolderId={acct.driveFolderId}
+                    lastBackfill={
+                      lastTouch
+                        ? { ago: timeAgo(lastTouch), abs: formatTime(lastTouch) }
+                        : null
+                    }
+                    cursor={formatCursorYmd(liveCursor)}
+                    mode={backfillMode(acct.driveBootstrapCompletedAt)}
+                    liveStatus={livePerAccount.get(acct.id) ?? null}
+                  />
+                );
+              })}
             </tbody>
           </table>
         </div>

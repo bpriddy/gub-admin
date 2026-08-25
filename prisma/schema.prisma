@@ -231,6 +231,10 @@ model Account {
   driveBootstrapFiles Json? @map("drive_bootstrap_files")
   /// Latest completed forward sync wall-clock.
   driveLastSyncedAt  DateTime? @map("drive_last_synced_at") @db.Timestamptz
+  /// Forward-sync v2 cursor: exclusive lower bound of the next Activity
+  /// API window. Set on every runForward success; falls back to
+  /// driveBootstrapCompletedAt for the first forward chunk after bootstrap.
+  driveForwardCursorAt DateTime? @map("drive_forward_cursor_at") @db.Timestamptz
   /// Activity API pageToken for the next forward run. NULL before first
   /// forward chunk — engine establishes baseline via getStartPageToken().
   driveActivityPageToken String? @map("drive_activity_page_token")
