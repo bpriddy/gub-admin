@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "prepare": "git config core.hooksPath .githooks || true",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@perplexity-ai/perplexity_ai": "^0.27.0",
