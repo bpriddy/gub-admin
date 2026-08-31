@@ -6,6 +6,9 @@ const nextConfig = {
   // awaiting a cleanup PR. Without this, `next build` runs ESLint and fails.
   // Remove after the cleanup PR so builds gate on lint again.
   eslint: { ignoreDuringBuilds: true },
+  // src/instrumentation.ts — structured error logs on Cloud Run (stable in
+  // Next 15; still behind this flag on 14).
+  experimental: { instrumentationHook: true },
 };
 
 export default nextConfig;
