@@ -20,6 +20,7 @@ Google Cloud IAP at the network layer.
 | Accounts | `/accounts` | Client accounts with change history |
 | Campaigns | `/campaigns` | Campaign management with change logs |
 | Access Grants | `/grants` | Per-resource grants for accounts / campaigns / staff / teams / offices |
+| Grant Policies | `/grant-policies` | Team-to-resource grant rules the backend's grant sync applies; created inactive, previewed, then activated |
 | Access Requests | `/access-requests` | Resource-scoped access request review workflow |
 | Resourcing | `/resourcing` | Search staff by skills, interests, certifications |
 | Data Sources | `/data-sources` | Sync configuration, run history, run details |
