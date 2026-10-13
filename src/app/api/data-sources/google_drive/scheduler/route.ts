@@ -12,12 +12,15 @@
 
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { requireActor } from '@/lib/actor';
 import { getDrivePollJob, updateDrivePollSchedule } from '@/lib/cloud-scheduler';
 import { CADENCE_PRESETS, type CadenceKey } from '@/lib/drive-cadence';
 
-const SchedulerUpdateSchema = z.object({
-  cadence: z.enum(['1h', '2h', '6h', '12h', '24h']),
-}).strict();
+const SchedulerUpdateSchema = z
+  .object({
+    cadence: z.enum(['1h', '2h', '6h', '12h', '24h']),
+  })
+  .strict();
 
 export async function GET() {
   try {
@@ -26,9 +29,9 @@ export async function GET() {
     // matched key as the selected dropdown value; if no preset matches
     // (someone edited via gcloud or console), the UI shows "custom" and
     // disables the dropdown until they pick a preset.
-    const matched: CadenceKey | undefined = (
-      Object.keys(CADENCE_PRESETS) as CadenceKey[]
-    ).find((k) => CADENCE_PRESETS[k].schedule === job.schedule);
+    const matched: CadenceKey | undefined = (Object.keys(CADENCE_PRESETS) as CadenceKey[]).find(
+      (k) => CADENCE_PRESETS[k].schedule === job.schedule,
+    );
     return NextResponse.json({
       job,
       matchedPreset: matched ?? null,
@@ -44,6 +47,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const actor = await requireActor();
+  if ('response' in actor) return actor.response;
+
   let body: unknown;
   try {
     body = await request.json();

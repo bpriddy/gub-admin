@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireActor } from '@/lib/actor';
 import { z } from 'zod';
 
 const UpdateSchema = z.object({
@@ -9,6 +10,9 @@ const UpdateSchema = z.object({
 });
 
 export async function PATCH(request: Request, { params }: { params: { key: string } }) {
+  const actor = await requireActor();
+  if ('response' in actor) return actor.response;
+
   const body = await request.json();
   const parsed = UpdateSchema.safeParse(body);
 

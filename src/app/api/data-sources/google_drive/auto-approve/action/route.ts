@@ -20,10 +20,9 @@
 
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import {
-  pauseDriveAutoApproveJob,
-  resumeDriveAutoApproveJob,
-} from '@/lib/cloud-scheduler';
+import { requireActor } from '@/lib/actor';
+import { fetchGub } from '@/lib/gub-backend';
+import { pauseDriveAutoApproveJob, resumeDriveAutoApproveJob } from '@/lib/cloud-scheduler';
 
 const ActionSchema = z
   .object({
@@ -32,33 +31,29 @@ const ActionSchema = z
   .strict();
 
 /**
- * Fire the GUB auto-approve endpoint using the runtime SA's identity.
- * Same fetch shape as the trigger-job helpers — plain server-side
- * HTTPS. GUB is --allow-unauthenticated in dev so no bearer token
- * needed today; add one here when GUB tightens.
+ * Fire the GUB auto-approve endpoint using the runtime SA's identity:
+ * fetchGub attaches an ID token for gub-admin's runtime service account,
+ * the same kind of credential the drive-auto-approve scheduler job sends
+ * to this endpoint.
  */
 async function callGubAutoApprove(): Promise<{
   ok: boolean;
   status: number;
   body: unknown;
 }> {
-  const gubUrl =
-    process.env['GUB_BACKEND_URL'] ??
-    process.env['NEXT_PUBLIC_GUB_URL'] ??
-    'http://localhost:3000';
-  const res = await fetch(
-    `${gubUrl}/integrations/google-drive/auto-approve-all-pending`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{}',
-    },
-  );
+  const res = await fetchGub('/integrations/google-drive/auto-approve-all-pending', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  });
   const body = await res.json().catch(() => ({}));
   return { ok: res.ok, status: res.status, body };
 }
 
 export async function POST(request: Request) {
+  const actor = await requireActor();
+  if ('response' in actor) return actor.response;
+
   let raw: unknown;
   try {
     raw = await request.json();
@@ -99,9 +94,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ action, result: result.body });
   } catch (err) {
     const detail = err instanceof Error ? err.message : 'Unknown error';
-    return NextResponse.json(
-      { error: `Failed to ${action}`, detail },
-      { status: 502 },
-    );
+    return NextResponse.json({ error: `Failed to ${action}`, detail }, { status: 502 });
   }
 }

@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireActor } from '@/lib/actor';
+import { fetchGub } from '@/lib/gub-backend';
 import { enqueueResearchJobs } from '@/lib/research/enqueue';
 import { triggerDriveSyncJob, TriggerJobError } from '@/lib/drive-sync/trigger-job';
 
 /**
  * Maps data source keys to their backend sync trigger endpoints.
- * Only sources still proxied via HTTP to GUB are listed here.
+ * Only sources still proxied via HTTP to GUB are listed here. The proxy
+ * call carries an ID token for gub-admin's runtime service account
+ * (fetchGub, src/lib/gub-backend.ts) — the same kind of credential Cloud
+ * Scheduler presents when it calls these endpoints on a timer.
  *
  * Notes:
  *   - perplexity_deep_research: handled in-gub-admin via the
@@ -26,9 +31,10 @@ const SYNC_ENDPOINTS: Record<string, string> = {
 /** Data source keys handled internally by gub-admin (not proxied to GUB). */
 const INTERNAL_SOURCES = new Set(['perplexity_deep_research', 'google_drive']);
 
-const GUB_URL = process.env['GUB_BACKEND_URL'] ?? process.env['NEXT_PUBLIC_GUB_URL'] ?? 'http://localhost:3000';
-
 export async function POST(_request: Request, { params }: { params: { key: string } }) {
+  const actor = await requireActor();
+  if ('response' in actor) return actor.response;
+
   const source = await prisma.dataSource.findUnique({ where: { key: params.key } });
   if (!source) {
     return NextResponse.json({ error: 'Data source not found' }, { status: 404 });
@@ -51,8 +57,7 @@ export async function POST(_request: Request, { params }: { params: { key: strin
         await triggerDriveSyncJob({ mode: 'run-full-sync' });
         return NextResponse.json({ status: 'triggered', mode: 'run-full-sync' });
       } catch (err) {
-        const detail =
-          err instanceof TriggerJobError ? err.message : (err as Error).message;
+        const detail = err instanceof TriggerJobError ? err.message : (err as Error).message;
         return NextResponse.json(
           { error: 'Failed to trigger gub-drive-sync Job', detail },
           { status: 502 },
@@ -68,7 +73,7 @@ export async function POST(_request: Request, { params }: { params: { key: strin
   }
 
   try {
-    const res = await fetch(`${GUB_URL}${endpoint}`, {
+    const res = await fetchGub(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     });
@@ -91,4 +96,3 @@ export async function POST(_request: Request, { params }: { params: { key: strin
     );
   }
 }
-

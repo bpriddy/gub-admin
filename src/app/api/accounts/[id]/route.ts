@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireActor } from '@/lib/actor';
 import { z } from 'zod';
 
 const UpdateAccountSchema = z.object({
@@ -22,6 +23,9 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
 }
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+  const actor = await requireActor();
+  if ('response' in actor) return actor.response;
+
   const body = await request.json();
   const parsed = UpdateAccountSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
@@ -31,6 +35,9 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 }
 
 export async function DELETE(_: Request, { params }: { params: { id: string } }) {
+  const actor = await requireActor();
+  if ('response' in actor) return actor.response;
+
   await prisma.account.delete({ where: { id: params.id } });
   return new NextResponse(null, { status: 204 });
 }
