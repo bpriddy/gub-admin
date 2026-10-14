@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireActor } from '@/lib/actor';
 import { z } from 'zod';
 
 // Pre-create a user stub by email. The user row is created with
@@ -13,13 +14,18 @@ import { z } from 'zod';
 // pre-creates the GUB identity stub.
 
 const CreateStubSchema = z.object({
-  email:       z.string().email(),
+  email: z.string().email(),
   displayName: z.string().min(1).max(256).optional(),
 });
 
 export async function POST(request: Request) {
+  const actor = await requireActor();
+  if ('response' in actor) return actor.response;
+
   let body: unknown;
-  try { body = await request.json(); } catch {
+  try {
+    body = await request.json();
+  } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 

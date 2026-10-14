@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireActor } from '@/lib/actor';
 import { z } from 'zod';
 
 export async function GET() {
@@ -27,12 +28,17 @@ export async function GET() {
 // (or any other unknown key) returns 400 rather than silently ignoring
 // the field. If a future caller revives in-app role checks, that 400 is
 // the early signal to revisit this design intentionally.
-const UpdateUserSchema = z.object({
-  isActive: z.boolean().optional(),
-  displayName: z.string().nullable().optional(),
-}).strict();
+const UpdateUserSchema = z
+  .object({
+    isActive: z.boolean().optional(),
+    displayName: z.string().nullable().optional(),
+  })
+  .strict();
 
 export async function PATCH(request: Request) {
+  const actor = await requireActor();
+  if ('response' in actor) return actor.response;
+
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });

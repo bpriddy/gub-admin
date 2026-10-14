@@ -20,6 +20,7 @@ Google Cloud IAP at the network layer.
 | Accounts | `/accounts` | Client accounts with change history |
 | Campaigns | `/campaigns` | Campaign management with change logs |
 | Access Grants | `/grants` | Per-resource grants for accounts / campaigns / staff / teams / offices |
+| Grant Policies | `/grant-policies` | Team-to-resource grant rules the backend's grant sync applies; created inactive, previewed, then activated |
 | Access Requests | `/access-requests` | Resource-scoped access request review workflow |
 | Resourcing | `/resourcing` | Search staff by skills, interests, certifications |
 | Data Sources | `/data-sources` | Sync configuration, run history, run details |
@@ -96,7 +97,8 @@ This app is an **admin-only, break-glass tool** used rarely. The authorization
 boundary is **Cloud IAP**, not in-app role checks: only users explicitly
 listed in the IAP IAM binding can reach any page or API route. Once past
 IAP, every user has full admin capabilities — the app does not gate features
-on `User.isAdmin` or `User.role`.
+on `User.isAdmin` or `User.role` (writes additionally need an active Staff
+record; see below).
 
 **Source of truth: Terraform.** The list of authorized emails lives in
 `gcp-universal-backend/terraform/environments/<env>.tfvars` as the
@@ -118,8 +120,12 @@ What this means in practice:
 - To grant admin access: add the email to `admin_emails` in the tfvars
   file in the gcp-universal-backend repo, get a PR review, apply.
 - To revoke: remove the email from the same file, apply.
-- The audit log (`audit_log` table) still records the IAP-resolved Staff
-  member behind every write — see `src/lib/actor.ts`.
+- Every write endpoint (POST / PUT / PATCH / DELETE under `/api`) also
+  requires the IAP email to belong to an **active Staff record**
+  (`requireActor` in `src/lib/actor.ts`). An IAP user without one can read
+  but gets a 403 on writes. Writes that record an actor (the `audit_log`
+  table, the team and office change history) take it from that Staff
+  record, not from the request.
 
 ## Secrets & rotation
 
@@ -140,6 +146,7 @@ connection string.
 | `DATABASE_URL` | Secret Manager: `gub-admin-db-url-<env>` (e.g. `gub-admin-db-url-dev`) | Self-managed (Cloud SQL) | Direct DB access from server components and API routes (`BYPASSRLS` access) |
 | `IAP_DEV_EMAIL` | `.env.local` only — **never** set on a deployed Cloud Run service | N/A — local dev shortcut | Bypasses Cloud IAP locally, authenticating the request as this email. Three-layer guard in `src/lib/iap-dev-bypass.ts` refuses to boot if set with `NODE_ENV=production` or a non-localhost Host header. |
 | Cloud SQL connection | Auto-managed via `--add-cloudsql-instances` | GCP | Connects to the shared Cloud SQL instance — no static credentials |
+| GUB ID token | Not stored — minted from the Cloud Run metadata server on each server-side call to GUB (`src/lib/gub-backend.ts`) | Google, for the runtime service account | Authenticates gub-admin's server-side calls to GUB; audience = the GUB backend URL. Short-lived, nothing to rotate |
 | IAP IAM binding | Managed in **gcp-universal-backend** (`terraform/gub_admin_iap.tf`) | GCP IAP | Authoritative list of users authorized to reach this app |
 
 ### Rotation procedures

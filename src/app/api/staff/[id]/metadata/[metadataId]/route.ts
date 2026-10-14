@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireActor } from '@/lib/actor';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 const UpdateSchema = z.object({
-  type:       z.string().min(1).max(64).optional(),
-  label:      z.string().min(1).max(256).optional(),
-  value:      z.string().max(256).nullable().optional(),
-  notes:      z.string().max(4000).nullable().optional(),
-  metadata:   z.record(z.string(), z.unknown()).nullable().optional(),
+  type: z.string().min(1).max(64).optional(),
+  label: z.string().min(1).max(256).optional(),
+  value: z.string().max(256).nullable().optional(),
+  notes: z.string().max(4000).nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   isFeatured: z.boolean().optional(),
 });
 
@@ -16,8 +17,13 @@ export async function PATCH(
   request: Request,
   { params }: { params: { id: string; metadataId: string } },
 ) {
+  const actor = await requireActor();
+  if ('response' in actor) return actor.response;
+
   let body: unknown;
-  try { body = await request.json(); } catch {
+  try {
+    body = await request.json();
+  } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
@@ -33,13 +39,16 @@ export async function PATCH(
   const row = await prisma.staffMetadata.update({
     where: { id: params.metadataId },
     data: {
-      ...(input.type       !== undefined ? { type: input.type }           : {}),
-      ...(input.label      !== undefined ? { label: input.label }         : {}),
-      ...(input.value      !== undefined ? { value: input.value ?? null } : {}),
-      ...(input.notes      !== undefined ? { notes: input.notes ?? null } : {}),
+      ...(input.type !== undefined ? { type: input.type } : {}),
+      ...(input.label !== undefined ? { label: input.label } : {}),
+      ...(input.value !== undefined ? { value: input.value ?? null } : {}),
+      ...(input.notes !== undefined ? { notes: input.notes ?? null } : {}),
       ...(input.isFeatured !== undefined ? { isFeatured: input.isFeatured } : {}),
       ...(input.metadata !== undefined
-        ? { metadata: input.metadata != null ? (input.metadata as Prisma.InputJsonValue) : Prisma.JsonNull }
+        ? {
+            metadata:
+              input.metadata != null ? (input.metadata as Prisma.InputJsonValue) : Prisma.JsonNull,
+          }
         : {}),
     },
   });
@@ -51,6 +60,9 @@ export async function DELETE(
   _request: Request,
   { params }: { params: { id: string; metadataId: string } },
 ) {
+  const actor = await requireActor();
+  if ('response' in actor) return actor.response;
+
   const existing = await prisma.staffMetadata.findFirst({
     where: { id: params.metadataId, staffId: params.id },
   });

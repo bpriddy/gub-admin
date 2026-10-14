@@ -31,6 +31,7 @@
 
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { requireActor } from '@/lib/actor';
 import {
   pauseDrivePollJob,
   resumeDrivePollJob,
@@ -45,6 +46,9 @@ const ActionSchema = z
   .strict();
 
 export async function POST(request: Request) {
+  const actor = await requireActor();
+  if ('response' in actor) return actor.response;
+
   let raw: unknown;
   try {
     raw = await request.json();
@@ -78,9 +82,6 @@ export async function POST(request: Request) {
     // 403 is the interesting failure mode for pause/resume before the
     // terraform apply lands — surface it as-is so the UI can render a
     // helpful message.
-    return NextResponse.json(
-      { error: `Failed to ${action}`, detail },
-      { status: 502 },
-    );
+    return NextResponse.json({ error: `Failed to ${action}`, detail }, { status: 502 });
   }
 }

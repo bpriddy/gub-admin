@@ -28,6 +28,7 @@ const navLinks = [
   { href: '/campaigns', label: 'Campaigns' },
   { href: '/ideas', label: 'Ideas' },
   { href: '/grants', label: 'Access Grants' },
+  { href: '/grant-policies', label: 'Grant Policies' },
   { href: '/access-requests', label: 'Access Requests' },
   { href: '/resourcing', label: 'Resourcing' },
   { href: '/data-sources', label: 'Data Sources' },
@@ -38,7 +39,9 @@ const navLinks = [
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 text-gray-900`}>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 text-gray-900`}
+      >
         <div className="min-h-screen flex flex-col">
           <nav className="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-6">
             <span className="font-semibold text-sm tracking-tight text-gray-800">GUB Admin</span>

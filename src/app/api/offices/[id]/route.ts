@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireActor } from '@/lib/actor';
 import { z } from 'zod';
 
 const UpdateOfficeSchema = z.object({
@@ -7,15 +8,17 @@ const UpdateOfficeSchema = z.object({
   syncCity: z.string().nullable().optional(),
   isActive: z.boolean().optional(),
   startedAt: z.string().nullable().optional(),
-  changedByStaffId: z.string().uuid().optional(),
 });
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+  const actor = await requireActor();
+  if ('response' in actor) return actor.response;
+
   const body = await request.json();
   const parsed = UpdateOfficeSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const { name, syncCity, isActive, startedAt, changedByStaffId } = parsed.data;
+  const { name, syncCity, isActive, startedAt } = parsed.data;
 
   const before = await prisma.office.findUnique({ where: { id: params.id } });
   if (!before) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -37,23 +40,40 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     changedBy?: string | null;
   }[] = [];
 
-  const changedBy = changedByStaffId ?? null;
+  // Attribute the change to the verified actor. A client-supplied id is never
+  // read (see src/lib/actor.ts), so history cannot be attributed to someone else.
+  const changedBy = actor.actorId;
 
   if (name !== undefined && name !== before.name) {
     changeRows.push({ officeId: params.id, property: 'name', valueText: name, changedBy });
   }
   if (syncCity !== undefined && (syncCity ?? null) !== before.syncCity) {
-    changeRows.push({ officeId: params.id, property: 'sync_city', valueText: syncCity ?? null, changedBy });
+    changeRows.push({
+      officeId: params.id,
+      property: 'sync_city',
+      valueText: syncCity ?? null,
+      changedBy,
+    });
   }
   if (isActive !== undefined && isActive !== before.isActive) {
-    changeRows.push({ officeId: params.id, property: 'is_active', valueText: String(isActive), changedBy });
+    changeRows.push({
+      officeId: params.id,
+      property: 'is_active',
+      valueText: String(isActive),
+      changedBy,
+    });
   }
   if (startedAt !== undefined) {
     const newDate = startedAt ? new Date(startedAt) : null;
     const oldDate = before.startedAt;
     const changed = newDate?.toISOString() !== oldDate?.toISOString();
     if (changed) {
-      changeRows.push({ officeId: params.id, property: 'started_at', valueDate: newDate, changedBy });
+      changeRows.push({
+        officeId: params.id,
+        property: 'started_at',
+        valueDate: newDate,
+        changedBy,
+      });
     }
   }
 
@@ -65,6 +85,9 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 }
 
 export async function DELETE(_: Request, { params }: { params: { id: string } }) {
+  const actor = await requireActor();
+  if ('response' in actor) return actor.response;
+
   await prisma.office.delete({ where: { id: params.id } });
   return new NextResponse(null, { status: 204 });
 }

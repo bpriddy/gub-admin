@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireActor } from '@/lib/actor';
 import { z } from 'zod';
 
 export async function GET(request: Request) {
@@ -29,6 +30,9 @@ const CreateCampaignSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const actor = await requireActor();
+  if ('response' in actor) return actor.response;
+
   const body = await request.json();
   const parsed = CreateCampaignSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
