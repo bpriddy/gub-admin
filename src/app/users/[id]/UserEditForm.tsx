@@ -4,16 +4,16 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 // Authorization for this app is enforced at Cloud IAP — see README's
-// "Authorization" section. The `isAdmin` and `role` columns on the User
-// model are retained in the DB for future use but are no longer editable
-// from this form. The list view at /users still renders them as read-only
-// badges.
+// "Authorization" section. `role` is not editable from this form, and
+// `isAdmin` can only be turned OFF (demote); promotion is not an action of
+// this app. The list view at /users still renders both as read-only badges.
 type Props = {
   user: {
     id: string;
     email: string;
     displayName: string | null;
     isActive: boolean;
+    isAdmin: boolean;
   };
 };
 
@@ -24,6 +24,24 @@ export default function UserEditForm({ user }: Props) {
   });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+
+  async function handleDemote() {
+    if (!window.confirm(`Remove platform admin from ${user.email}?`)) return;
+    setSaving(true);
+    setMessage('');
+    const res = await fetch(`/api/users?id=${user.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isAdmin: false }),
+    });
+    setSaving(false);
+    if (res.ok) {
+      setMessage('Demoted');
+      router.refresh();
+    } else {
+      setMessage('Error demoting');
+    }
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -65,6 +83,15 @@ export default function UserEditForm({ user }: Props) {
         >
           {saving ? 'Saving…' : 'Save'}
         </button>
+        {user.isAdmin && (
+          <button
+            onClick={handleDemote}
+            disabled={saving}
+            className="text-sm px-3 py-1.5 border border-red-300 text-red-700 rounded hover:bg-red-50 disabled:opacity-50"
+          >
+            Demote from admin
+          </button>
+        )}
         {message && <span className="text-xs text-gray-500">{message}</span>}
       </div>
     </div>

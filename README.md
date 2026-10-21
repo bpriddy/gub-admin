@@ -108,12 +108,14 @@ record; see below).
 tfvars file will be revoked on the next `terraform apply`. To grant or
 revoke access, edit `admin_emails` and apply.
 
-The `User.isAdmin` and `User.role` columns remain in the Prisma schema for
-possible future use, but are no longer editable from this app. The list
-view at `/users` still renders them as read-only badges. The PATCH
-endpoint at `/api/users` rejects bodies containing either field with a
-400 (Zod `.strict()`); any future caller that tries to write them will
-fail loud rather than silently no-op.
+The `User.isAdmin` and `User.role` columns remain in the Prisma schema, and
+the list view at `/users` renders them as read-only badges. `role` is not
+editable. `isAdmin` can only be **demoted**: the PATCH endpoint at
+`/api/users` accepts `isAdmin: false` and rejects `isAdmin: true` (and any
+`role`) with a 400 (Zod `.strict()`), so promotion is never an action of this
+app. Every PATCH on `/api/users` writes one `audit_log` row
+(`user_updated`, entity `user`) attributed to the IAP actor, with the
+before/after values of the fields in the request.
 
 What this means in practice:
 
