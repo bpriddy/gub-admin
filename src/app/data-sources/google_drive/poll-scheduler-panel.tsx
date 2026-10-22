@@ -65,9 +65,7 @@ export function PollSchedulerPanel({ job, readError, matchedPreset }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState<PendingAction>(null);
   const [error, setError] = useState<string | null>(null);
-  const [selectedPreset, setSelectedPreset] = useState<CadenceKey | ''>(
-    matchedPreset ?? '',
-  );
+  const [selectedPreset, setSelectedPreset] = useState<CadenceKey | ''>(matchedPreset ?? '');
 
   // ── Server-read failure ─────────────────────────────────────────────────
   // The whole panel depends on `job` — without it we can't render state or
@@ -170,8 +168,8 @@ export function PollSchedulerPanel({ job, readError, matchedPreset }: Props) {
               Poller is paused — no new syncs firing on schedule.
             </div>
             <div className="text-xs text-amber-800 mt-1">
-              Cron: <code className="text-xs bg-white px-1 rounded">{job.schedule}</code>{' '}
-              ({job.timeZone}) · Last attempt: {timeAgo(job.lastAttemptTime)}
+              Cron: <code className="text-xs bg-white px-1 rounded">{job.schedule}</code> (
+              {job.timeZone}) · Last attempt: {timeAgo(job.lastAttemptTime)}
             </div>
           </div>
           <button
@@ -187,8 +185,8 @@ export function PollSchedulerPanel({ job, readError, matchedPreset }: Props) {
       {isWeird && (
         <div className="bg-red-50 border border-red-200 rounded-lg px-5 py-3 mb-3 text-sm text-red-800">
           <strong>Scheduler in unexpected state:</strong>{' '}
-          <code className="text-xs bg-white px-1 rounded">{job.state}</code>. Investigate in
-          the Cloud Scheduler console before relying on the automation.
+          <code className="text-xs bg-white px-1 rounded">{job.state}</code>. Investigate in the
+          Cloud Scheduler console before relying on the automation.
         </div>
       )}
 
@@ -208,10 +206,10 @@ export function PollSchedulerPanel({ job, readError, matchedPreset }: Props) {
               )}
             </div>
             <div className="text-xs text-gray-500">
-              Fires <code className="text-xs bg-gray-100 px-1 rounded">gub-drive-sync</code>{' '}
-              with <code className="text-xs bg-gray-100 px-1 rounded">mode=forward-all</code>{' '}
-              on the cron below (per-account Activity cursor; same code path as a Backfill
-              click). Last attempt: {timeAgo(job.lastAttemptTime)}.
+              Fires <code className="text-xs bg-gray-100 px-1 rounded">gub-drive-sync</code> with{' '}
+              <code className="text-xs bg-gray-100 px-1 rounded">mode=forward-all</code> on the cron
+              below (per-account Activity cursor; same code path as a Backfill click). Last attempt:{' '}
+              {timeAgo(job.lastAttemptTime)}.
             </div>
           </div>
           {isEnabled && (
