@@ -36,7 +36,7 @@ import {
   getDriveAutoApproveJob,
   type DrivePollJobInfo,
 } from '@/lib/cloud-scheduler';
-import { CADENCE_PRESETS, type CadenceKey } from '@/lib/drive-cadence';
+import { matchCadencePreset, type CadenceKey } from '@/lib/drive-cadence';
 
 export const dynamic = 'force-dynamic';
 
@@ -165,10 +165,7 @@ export default async function DriveBackfillPage() {
 
   if (pollResult.status === 'fulfilled') {
     pollJob = pollResult.value;
-    matchedPreset =
-      (Object.keys(CADENCE_PRESETS) as CadenceKey[]).find(
-        (k) => CADENCE_PRESETS[k].schedule === pollJob!.schedule,
-      ) ?? null;
+    matchedPreset = matchCadencePreset(pollJob);
   } else {
     pollJobError =
       pollResult.reason instanceof Error ? pollResult.reason.message : String(pollResult.reason);

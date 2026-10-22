@@ -32,7 +32,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CADENCE_PRESETS, type CadenceKey } from '@/lib/drive-cadence';
+import { CADENCE_NOTES, CADENCE_PRESETS, type CadenceKey } from '@/lib/drive-cadence';
 import type { DrivePollJobInfo } from '@/lib/cloud-scheduler';
 
 type PendingAction = 'pause' | 'resume' | 'run-now' | 'save-cadence' | null;
@@ -88,6 +88,7 @@ export function PollSchedulerPanel({ job, readError, matchedPreset }: Props) {
   const isEnabled = job.state === 'ENABLED';
   const isWeird = !isPaused && !isEnabled; // DISABLED, UPDATE_FAILED, etc.
   const cadenceDirty = selectedPreset !== '' && selectedPreset !== matchedPreset;
+  const cadenceNote = selectedPreset === '' ? undefined : CADENCE_NOTES[selectedPreset];
 
   async function callAction(action: 'pause' | 'resume' | 'run-now') {
     setPending(action);
@@ -264,6 +265,8 @@ export function PollSchedulerPanel({ job, readError, matchedPreset }: Props) {
             {pending === 'run-now' ? 'Firing…' : 'Run now'}
           </button>
         </div>
+
+        {cadenceNote && <div className="mt-2 text-xs text-amber-800">{cadenceNote}</div>}
 
         {error && (
           <div className="mt-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
