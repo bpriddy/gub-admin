@@ -4,21 +4,21 @@
  *   GET  → returns the current Cloud Scheduler job state (cron, state,
  *          last attempt). The Drive settings page reads this on every
  *          render so what's displayed reflects what's deployed.
- *   POST → updates the Cloud Scheduler cron. Body: { schedule: string,
- *          timeZone?: string }. Validated against an allow-list of
- *          presets (1h / 2h / 6h / 12h / 24h) so an admin can't type a
- *          freeform cron — the UI exposes only those choices.
+ *   POST → updates the Cloud Scheduler cron. Body: { cadence: <preset
+ *          key> }. Validated against the presets in src/lib/drive-cadence.ts
+ *          so an admin can't type a freeform cron — the UI exposes only
+ *          those choices.
  */
 
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireActor } from '@/lib/actor';
 import { getDrivePollJob, updateDrivePollSchedule } from '@/lib/cloud-scheduler';
-import { CADENCE_PRESETS, type CadenceKey } from '@/lib/drive-cadence';
+import { CADENCE_KEYS, CADENCE_PRESETS, matchCadencePreset } from '@/lib/drive-cadence';
 
 const SchedulerUpdateSchema = z
   .object({
-    cadence: z.enum(['1h', '2h', '6h', '12h', '24h']),
+    cadence: z.enum(CADENCE_KEYS),
   })
   .strict();
 
@@ -29,12 +29,9 @@ export async function GET() {
     // matched key as the selected dropdown value; if no preset matches
     // (someone edited via gcloud or console), the UI shows "custom" and
     // disables the dropdown until they pick a preset.
-    const matched: CadenceKey | undefined = (Object.keys(CADENCE_PRESETS) as CadenceKey[]).find(
-      (k) => CADENCE_PRESETS[k].schedule === job.schedule,
-    );
     return NextResponse.json({
       job,
-      matchedPreset: matched ?? null,
+      matchedPreset: matchCadencePreset(job),
       presets: CADENCE_PRESETS,
     });
   } catch (err) {

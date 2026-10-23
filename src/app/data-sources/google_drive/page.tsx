@@ -36,7 +36,7 @@ import {
   getDriveAutoApproveJob,
   type DrivePollJobInfo,
 } from '@/lib/cloud-scheduler';
-import { CADENCE_PRESETS, type CadenceKey } from '@/lib/drive-cadence';
+import { matchCadencePreset, type CadenceKey } from '@/lib/drive-cadence';
 
 export const dynamic = 'force-dynamic';
 
@@ -165,15 +165,10 @@ export default async function DriveBackfillPage() {
 
   if (pollResult.status === 'fulfilled') {
     pollJob = pollResult.value;
-    matchedPreset =
-      (Object.keys(CADENCE_PRESETS) as CadenceKey[]).find(
-        (k) => CADENCE_PRESETS[k].schedule === pollJob!.schedule,
-      ) ?? null;
+    matchedPreset = matchCadencePreset(pollJob);
   } else {
     pollJobError =
-      pollResult.reason instanceof Error
-        ? pollResult.reason.message
-        : String(pollResult.reason);
+      pollResult.reason instanceof Error ? pollResult.reason.message : String(pollResult.reason);
   }
 
   if (autoApproveResult.status === 'fulfilled') {
@@ -204,8 +199,7 @@ export default async function DriveBackfillPage() {
     .filter((r) => r.status === 'pending')
     .map((r) => r.requestedAt.getTime())
     .reduce<number | null>((min, t) => (min === null || t < min ? t : min), null);
-  const triggerLikelyFailed =
-    oldestPending !== null && Date.now() - oldestPending > 2 * 60 * 1000;
+  const triggerLikelyFailed = oldestPending !== null && Date.now() - oldestPending > 2 * 60 * 1000;
 
   // Only poll when there's a live request to watch. Idle state = no
   // refresh, no DB queries. Click flow re-enables polling: the
@@ -233,41 +227,37 @@ export default async function DriveBackfillPage() {
           </div>
           <p className="text-sm text-gray-500 mt-1 max-w-2xl">
             Per-account daily-scan backfill. Each <strong>Backfill</strong> click queues a
-            single-day scan from the account&apos;s current cursor and immediately
-            triggers the <code className="text-xs bg-gray-100 px-1 rounded mx-1">gub-drive-sync</code>
-            Cloud Run Job via the Admin API. The Job claims pending rows, runs them,
-            and persists field updates + synthesized status_markdown.
+            single-day scan from the account&apos;s current cursor and immediately triggers the{' '}
+            <code className="text-xs bg-gray-100 px-1 rounded mx-1">gub-drive-sync</code>
+            Cloud Run Job via the Admin API. The Job claims pending rows, runs them, and persists
+            field updates + synthesized status_markdown.
           </p>
         </div>
       </div>
 
       {/* Poll scheduler status + controls (Pause/Resume/Poll now/Cadence). */}
-      <PollSchedulerPanel
-        job={pollJob}
-        readError={pollJobError}
-        matchedPreset={matchedPreset}
-      />
+      <PollSchedulerPanel job={pollJob} readError={pollJobError} matchedPreset={matchedPreset} />
 
       {/* Auto-approve toggle — dev bypass of human review. Off by default. */}
       <AutoApprovePanel job={autoApproveJob} readError={autoApproveJobError} />
 
       {triggerLikelyFailed && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg px-5 py-3 mb-6 text-sm text-amber-800">
-          <strong>Job trigger likely failed.</strong>{' '}
-          The oldest <code className="text-xs bg-white px-1 rounded">pending</code> request is
-          more than 2 minutes old without going to <code className="text-xs bg-white px-1 rounded">running</code>.
-          In prod that usually means IAM (gub-admin SA needs <code className="text-xs bg-white px-1 rounded">roles/run.developer</code>{' '}
-          on the Job) or a missing Job. Locally, run{' '}
-          <code className="text-xs bg-white px-1 rounded">npm run backfill-pending</code> in
-          your gub-drive-sync checkout to drain the queue manually.
+          <strong>Job trigger likely failed.</strong> The oldest{' '}
+          <code className="text-xs bg-white px-1 rounded">pending</code> request is more than 2
+          minutes old without going to{' '}
+          <code className="text-xs bg-white px-1 rounded">running</code>. In prod that usually means
+          IAM (gub-admin SA needs{' '}
+          <code className="text-xs bg-white px-1 rounded">roles/run.developer</code> on the Job) or
+          a missing Job. Locally, run{' '}
+          <code className="text-xs bg-white px-1 rounded">npm run backfill-pending</code> in your
+          gub-drive-sync checkout to drain the queue manually.
         </div>
       )}
 
       {/* Per-account backfill rows */}
       <div className="mb-8">
-        <h2 className="text-sm font-semibold text-gray-700 mb-3">
-          Accounts ({accounts.length})
-        </h2>
+        <h2 className="text-sm font-semibold text-gray-700 mb-3">Accounts ({accounts.length})</h2>
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
@@ -307,9 +297,7 @@ export default async function DriveBackfillPage() {
                     name={acct.name}
                     driveFolderId={acct.driveFolderId}
                     lastBackfill={
-                      lastTouch
-                        ? { ago: timeAgo(lastTouch), abs: formatTime(lastTouch) }
-                        : null
+                      lastTouch ? { ago: timeAgo(lastTouch), abs: formatTime(lastTouch) } : null
                     }
                     cursor={formatCursorYmd(liveCursor)}
                     mode={backfillMode(acct.driveBootstrapCompletedAt)}
@@ -386,7 +374,7 @@ export default async function DriveBackfillPage() {
               <col className="w-24" /> {/* Mode      */}
               <col className="w-20" /> {/* Files     */}
               <col className="w-32" /> {/* By        */}
-              <col />                  {/* Summary — fills remainder */}
+              <col /> {/* Summary — fills remainder */}
               <col className="w-12" /> {/* Action ✕  */}
             </colgroup>
             <thead className="bg-gray-50 border-b border-gray-200">
@@ -410,7 +398,8 @@ export default async function DriveBackfillPage() {
               {recentRequests.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
-                    No backfill requests yet. Click a row&apos;s <strong>Backfill</strong> button to queue one.
+                    No backfill requests yet. Click a row&apos;s <strong>Backfill</strong> button to
+                    queue one.
                   </td>
                 </tr>
               )}
